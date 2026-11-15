@@ -213,6 +213,14 @@ function puzzleOf(day){const n=dayNo(day);const p=PUZZLES[((n-1)%PUZZLES.length+
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
 
+// ---- この端末の記録のリセット（URLの末尾に ?reset=1 を付けて開く）----
+let didReset=false;
+if(/[?&]reset=1(&|$)/.test(location.search)){
+  for(const k of ['daily','hist','cid']){try{localStorage.removeItem('mojihakari_'+k);}catch(e){}}
+  try{history.replaceState(null,'',location.pathname);}catch(e){}
+  didReset=true;
+}
+
 // ---- DOM ----
 const $=id=>document.getElementById(id);
 const cv=$('cv'), ctx=cv.getContext('2d'), stage=$('stage');
@@ -552,6 +560,7 @@ function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;update(dt);render
 function boot(){
   $('name').value=store.get('mojihakari_name','');
   renderModes();rankPanel($('tPanel'));
+  if(didReset){const n=document.createElement('p');n.className='myrank';n.textContent='この端末の記録をリセットしました。今日の一問をもう一度遊べます。';$('modes').before(n);}
   document.fonts.load(`900 ${FS}px "Noto Sans JP"`,'あア字').catch(()=>{});
   requestAnimationFrame(frame);
 }
