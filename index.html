@@ -1,0 +1,563 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="字の重さは、黒い部分の広さ。お題の字とぴったり釣り合う言葉を天秤に載せる、1日1問の言葉パズル。全国ランキングあり。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="もじはかり">
+<meta property="og:description" content="字の重さは、黒い部分の広さ。お題の字とぴったり釣り合う言葉を天秤に載せる、1日1問の言葉パズル。全国ランキングあり。">
+<meta property="og:image" content="https://ggrr514-collab.github.io/mojihakari/og.png">
+<meta property="og:url" content="https://ggrr514-collab.github.io/mojihakari/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#cf3f26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="もじはかり">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}*,*::before,*::after{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head><body>
+<title>もじはかり</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@500;700;900&display=swap">
+<style>
+/* layout: 1画面アプリ。上=記録の帯とお題 / 中=天秤の舞台(canvas) / 下=これまでに載せた言葉と入力欄。暗いときは黒板。 */
+:root{
+  --bg:#f6f7f2; --paper:#fdfdfb; --ink:#1c1e1b; --muted:#666b62; --grid:#d98a6f;
+  --accent:#cf3f26; --desk:#a9814f; --deskdark:#7a5a33; --panel:#ffffff; --line:#e3e2da; --good:#2c7a4b;
+  --display:"Dela Gothic One","Hiragino Sans","Yu Gothic",sans-serif;
+  --body:"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16271f; --paper:#1d362b; --ink:#f2f0e6; --muted:#a8b8ad; --grid:#9fc0ad;
+  --accent:#ff8a66; --desk:#b08d5c; --deskdark:#7d5d3b; --panel:#20392e; --line:#2f4c3f; --good:#8fd6a8; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16271f; --paper:#1d362b; --ink:#f2f0e6; --muted:#a8b8ad; --grid:#9fc0ad;
+  --accent:#ff8a66; --desk:#b08d5c; --deskdark:#7d5d3b; --panel:#20392e; --line:#2f4c3f; --good:#8fd6a8; color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#app{height:100%;display:flex;flex-direction:column;gap:8px;padding-block:8px;max-width:560px;margin:0 auto}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.hud{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.chip{font-family:var(--display);font-size:13px;letter-spacing:.06em;background:var(--ink);color:var(--bg);padding:3px 9px;border-radius:4px;white-space:nowrap}
+.stat{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.stat b{font-size:18px;font-weight:900;white-space:nowrap}
+.stat span{font-size:10px;color:var(--muted);letter-spacing:.08em;white-space:nowrap}
+.hud .grow{flex:1}
+.icon-btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;font-size:13px;white-space:nowrap}
+
+#task{font-size:14px;line-height:1.5;min-height:21px}
+#task b{font-weight:900;font-size:17px}
+#task .rule{color:var(--accent);font-weight:700}
+
+#stage{position:relative;flex:1;min-height:0;border:1.5px solid var(--grid);border-radius:6px;overflow:hidden;background:var(--paper)}
+#cv{display:block;width:100%;height:100%}
+#toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
+  font-size:13px;padding:6px 12px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:.92}
+
+.hist{display:flex;gap:6px;align-items:center;min-height:34px;overflow-x:auto;scrollbar-width:none;font-variant-numeric:tabular-nums}
+.hist .lbl{font-size:10px;color:var(--muted);letter-spacing:.1em;flex:none}
+.hist .h{flex:none;display:flex;gap:6px;align-items:baseline;border:1px solid var(--grid);background:var(--paper);border-radius:3px;padding:4px 8px;font-size:13px}
+.hist .h b{font-weight:900;font-size:15px}
+.hist .h.best{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.hist .empty{font-size:12px;color:var(--muted)}
+
+form.in{display:flex;gap:8px}
+form.in input{flex:1;min-width:0;font:inherit;font-size:18px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--ink);background:var(--panel);color:var(--ink)}
+form.in button{border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:900;padding:0 18px;letter-spacing:.1em;white-space:nowrap}
+form.in button:disabled{opacity:.45}
+
+.overlay{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(24px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.logo{font-family:var(--display);font-size:46px;line-height:1;letter-spacing:.02em;display:flex;align-items:flex-end;gap:2px}
+.logo span{display:inline-block;border:2px solid var(--grid);background:var(--paper);padding:4px 2px 6px}
+.logo span:nth-child(-n+2){transform:translateY(7px) rotate(-3deg)}
+.logo span:nth-child(n+4){transform:translateY(-7px) rotate(3deg)}
+.logo span:nth-child(3){border-color:var(--accent);color:var(--accent)}
+.lead{font-size:15px;color:var(--muted);margin:0}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{text-align:left;border:1.5px solid var(--ink);background:var(--panel);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.mode.wide{grid-column:1/-1}
+.mode .m-name{font-family:var(--display);font-size:18px}
+.mode .m-sample{font-weight:900;font-size:22px;letter-spacing:.06em;overflow-wrap:anywhere}
+.mode .m-best{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rules{margin:0;padding-left:1.2em;font-size:14px;line-height:1.8}
+.rules b{color:var(--accent)}
+.field{display:flex;gap:8px;align-items:center;font-size:14px}
+.field input[type=text],.field input:not([type]){flex:1;min-width:0;font:inherit;font-size:16px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+h2{font-family:var(--display);font-weight:400;font-size:22px;margin:0}
+.big{font-family:var(--display);font-size:60px;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.big small{font-size:20px;color:var(--ink)}
+.breakdown{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.eq{background:var(--paper);border:1px solid var(--grid);padding:10px 12px;border-radius:4px;display:flex;flex-direction:column;gap:8px;font-variant-numeric:tabular-nums}
+.eq .side{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.eq .side b{font-weight:900;font-size:22px;overflow-wrap:anywhere}
+.eq .side span{white-space:nowrap;font-weight:700}
+.eq .each{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.rank{margin:0;padding:0;list-style:none;font-variant-numeric:tabular-nums;font-size:14px}
+.rank li{display:grid;grid-template-columns:2em 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.rank li.me{color:var(--accent);font-weight:700}
+.rank li small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank li span:nth-child(2){min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:none;border-radius:10px;padding:12px 18px;font-weight:700;background:var(--ink);color:var(--bg)}
+.btn.sub{background:var(--panel);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.rank-panel{display:flex;flex-direction:column;gap:8px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:13px}
+.tab[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.rank-status{font-size:13px;color:var(--muted)}
+.myrank{font-size:15px;font-weight:700;color:var(--accent)}
+a.btn{text-decoration:none;display:inline-block}
+#shareText{width:100%;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--panel);color:var(--ink);resize:none}
+.note{font-size:12px;color:var(--muted);margin:0;line-height:1.7}
+@media (prefers-reduced-motion: reduce){#toast{transition:none}}
+</style>
+
+<div id="app">
+  <header class="hud">
+    <span class="chip" id="hudMode">今日の一問</span>
+    <div class="stat"><b id="hudLeft">6</b><span id="hudLeftL">のこり 回</span></div>
+    <div class="stat"><b id="hudBest">-</b><span id="hudBestL">いちばん近い</span></div>
+    <div class="grow"></div>
+    <button class="icon-btn" id="sound" aria-label="音の切り替え">音 入</button>
+    <button class="icon-btn" id="quit">やめる</button>
+  </header>
+  <div id="task"></div>
+  <div id="stage"><canvas id="cv"></canvas><div id="toast" role="status"></div></div>
+  <div class="hist" id="hist"></div>
+  <form class="in" id="form" autocomplete="off">
+    <input id="txtL" type="text" enterkeyhint="next" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="左の言葉" aria-label="左の皿に載せる言葉" hidden>
+    <input id="txt" type="text" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="言葉を打って「載せる」" aria-label="右の皿に載せる言葉">
+    <button type="submit" id="go">載せる</button>
+  </form>
+</div>
+
+<section class="overlay" id="title">
+  <div class="sheet">
+    <div class="logo" aria-label="もじはかり"><span>も</span><span>じ</span><span>は</span><span>か</span><span>り</span></div>
+    <p class="lead">字の重さは、黒い部分の広さ。お題とぴったり釣り合う言葉を探そう。</p>
+    <div class="modes" id="modes"></div>
+    <ol class="rules">
+      <li>左の皿にお題が載っている。右の皿に載せる言葉を打って「載せる」。</li>
+      <li>天秤が傾いて、<b>何グラム重いか軽いか</b>が分かる。お題の重さは最後まで秘密。</li>
+      <li>載せ替えは<b>6回まで</b>。いちばん釣り合った回が記録になる。</li>
+      <li>お題に入っている字は使えない。同じ字は1つの言葉に<b>2回まで</b>、<b>12字まで</b>。</li>
+      <li>「国」は「鬱」より重い。画数が多いほど重いとは限らない。</li>
+    </ol>
+    <p class="note">重さの決め方：太いゴシック体（Noto Sans JP Black）で書いたときの黒い部分の広さ。マス全部が真っ黒なら100g。量れるのは、ひらがな・カタカナ・漢字（JIS第1・第2水準）・英数字です。</p>
+    <label class="field">名前 <input id="name" type="text" maxlength="10" placeholder="ななし"></label>
+    <div class="rank-panel" id="tPanel"></div>
+  </div>
+</section>
+
+<section class="overlay" id="result" hidden>
+  <div class="sheet">
+    <h2 id="rTitle">ぴったり！</h2>
+    <div class="big" id="rScore"></div>
+    <div class="breakdown" id="rBreak"></div>
+    <div class="eq" id="rEq"></div>
+    <div class="breakdown" id="rTries"></div>
+    <div class="myrank" id="rMyRank"></div>
+    <div class="rank-panel" id="rPanel"></div>
+    <textarea id="shareText" rows="4" readonly aria-label="シェア用の文"></textarea>
+    <label class="field" id="spoilRow"><input type="checkbox" id="spoil"> シェアに答えの言葉も入れる</label>
+    <div class="row">
+      <button class="btn" id="again">れんしゅうする</button>
+      <button class="btn sub" id="toTitle">はじめの画面</button>
+      <button class="btn sub" id="copy">結果をコピー</button>
+      <a class="btn sub" id="tweet" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet">Xでシェア</a>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+// ---- 公開設定（全国ランキングのGAS URL と 公開URL）----
+const RANK_API='https://script.google.com/macros/s/AKfycbwkoOCVIP7QafeYBEHHg2X7Sf6QUFqs8a8nzm0zZ_OOT7CZLfprai55ccyZX9qOCE8WqA/exec';
+const PUBLIC_URL='https://ggrr514-collab.github.io/mojihakari/';
+
+// ---- 字の重さ表（0.1g単位）と出題。tools/make.py が書き込む ----
+const WT_CH='0123456789ぁあぃいぅうぇえぉおかがきぎくぐけげこごさざしじすずせぜそぞただちぢっつづてでとどなにぬねのはばぱひびぴふぶぷへべぺほぼぽまみむめもゃやゅゆょよらりるれろゎわゐゑをんゔゕゖゝゞーァアィイゥウェエォオカガキギクグケゲコゴサザシジスズセゼソゾタダチヂッツヅテデトドナニヌネノハバパヒビピフブプヘベペホボポマミムメモャヤュユョヨラリルレロヮワヰヱヲンヴヵヶヷヸヹヺヽヾ亜唖娃阿哀愛挨姶逢葵茜穐悪握渥旭葦芦鯵梓圧斡扱宛姐虻飴絢綾鮎或粟袷安庵按暗案闇鞍杏以伊位依偉囲夷委威尉惟意慰易椅為畏異移維緯胃萎衣謂違遺医井亥域育郁磯一壱溢逸稲茨芋鰯允印咽員因姻引飲淫胤蔭院陰隠韻吋右宇烏羽迂雨卯鵜窺丑碓臼渦嘘唄欝蔚鰻姥厩浦瓜閏噂云運雲荏餌叡営嬰影映曳栄永泳洩瑛盈穎頴英衛詠鋭液疫益駅悦謁越閲榎厭円園堰奄宴延怨掩援沿演炎焔煙燕猿縁艶苑薗遠鉛鴛塩於汚甥凹央奥往応押旺横欧殴王翁襖鴬鴎黄岡沖荻億屋憶臆桶牡乙俺卸恩温穏音下化仮何伽価佳加可嘉夏嫁家寡科暇果架歌河火珂禍禾稼箇花苛茄荷華菓蝦課嘩貨迦過霞蚊俄峨我牙画臥芽蛾賀雅餓駕介会解回塊壊廻快怪悔恢懐戒拐改魁晦械海灰界皆絵芥蟹開階貝凱劾外咳害崖慨概涯碍蓋街該鎧骸浬馨蛙垣柿蛎鈎劃嚇各廓拡撹格核殻獲確穫覚角赫較郭閣隔革学岳楽額顎掛笠樫橿梶鰍潟割喝恰括活渇滑葛褐轄且鰹叶椛樺鞄株兜竃蒲釜鎌噛鴨栢茅萱粥刈苅瓦乾侃冠寒刊勘勧巻喚堪姦完官寛干幹患感慣憾換敢柑桓棺款歓汗漢澗潅環甘監看竿管簡緩缶翰肝艦莞観諌貫還鑑間閑関陥韓館舘丸含岸巌玩癌眼岩翫贋雁頑顔願企伎危喜器基奇嬉寄岐希幾忌揮机旗既期棋棄機帰毅気汽畿祈季稀紀徽規記貴起軌輝飢騎鬼亀偽儀妓宜戯技擬欺犠疑祇義蟻誼議掬菊鞠吉吃喫桔橘詰砧杵黍却客脚虐逆丘久仇休及吸宮弓急救朽求汲泣灸球究窮笈級糾給旧牛去居巨拒拠挙渠虚許距鋸漁禦魚亨享京供侠僑兇競共凶協匡卿叫喬境峡強彊怯恐恭挟教橋況狂狭矯胸脅興蕎郷鏡響饗驚仰凝尭暁業局曲極玉桐粁僅勤均巾錦斤欣欽琴禁禽筋緊芹菌衿襟謹近金吟銀九倶句区狗玖矩苦躯駆駈駒具愚虞喰空偶寓遇隅串櫛釧屑屈掘窟沓靴轡窪熊隈粂栗繰桑鍬勲君薫訓群軍郡卦袈祁係傾刑兄啓圭珪型契形径恵慶慧憩掲携敬景桂渓畦稽系経継繋罫茎荊蛍計詣警軽頚鶏芸迎鯨劇戟撃激隙桁傑欠決潔穴結血訣月件倹倦健兼券剣喧圏堅嫌建憲懸拳捲検権牽犬献研硯絹県肩見謙賢軒遣鍵険顕験鹸元原厳幻弦減源玄現絃舷言諺限乎個古呼固姑孤己庫弧戸故枯湖狐糊袴股胡菰虎誇跨鈷雇顧鼓五互伍午呉吾娯後御悟梧檎瑚碁語誤護醐乞鯉交佼侯候倖光公功効勾厚口向后喉坑垢好孔孝宏工巧巷幸広庚康弘恒慌抗拘控攻昂晃更杭校梗構江洪浩港溝甲皇硬稿糠紅紘絞綱耕考肯肱腔膏航荒行衡講貢購郊酵鉱砿鋼閤降項香高鴻剛劫号合壕拷濠豪轟麹克刻告国穀酷鵠黒獄漉腰甑忽惚骨狛込此頃今困坤墾婚恨懇昏昆根梱混痕紺艮魂些佐叉唆嵯左差査沙瑳砂詐鎖裟坐座挫債催再最哉塞妻宰彩才採栽歳済災采犀砕砦祭斎細菜裁載際剤在材罪財冴坂阪堺榊肴咲崎埼碕鷺作削咋搾昨朔柵窄策索錯桜鮭笹匙冊刷察拶撮擦札殺薩雑皐鯖捌錆鮫皿晒三傘参山惨撒散桟燦珊産算纂蚕讃賛酸餐斬暫残仕仔伺使刺司史嗣四士始姉姿子屍市師志思指支孜斯施旨枝止死氏獅祉私糸紙紫肢脂至視詞詩試誌諮資賜雌飼歯事似侍児字寺慈持時次滋治爾璽痔磁示而耳自蒔辞汐鹿式識鴫竺軸宍雫七叱執失嫉室悉湿漆疾質実蔀篠偲柴芝屡蕊縞舎写射捨赦斜煮社紗者謝車遮蛇邪借勺尺杓灼爵酌釈錫若寂弱惹主取守手朱殊狩珠種腫趣酒首儒受呪寿授樹綬需囚収周宗就州修愁拾洲秀秋終繍習臭舟蒐衆襲讐蹴輯週酋酬集醜什住充十従戎柔汁渋獣縦重銃叔夙宿淑祝縮粛塾熟出術述俊峻春瞬竣舜駿准循旬楯殉淳準潤盾純巡遵醇順処初所暑曙渚庶緒署書薯藷諸助叙女序徐恕鋤除傷償勝匠升召哨商唱嘗奨妾娼宵将小少尚庄床廠彰承抄招掌捷昇昌昭晶松梢樟樵沼消渉湘焼焦照症省硝礁祥称章笑粧紹肖菖蒋蕉衝裳訟証詔詳象賞醤鉦鍾鐘障鞘上丈丞乗冗剰城場壌嬢常情擾条杖浄状畳穣蒸譲醸錠嘱埴飾拭植殖燭織職色触食蝕辱尻伸信侵唇娠寝審心慎振新晋森榛浸深申疹真神秦紳臣芯薪親診身辛進針震人仁刃塵壬尋甚尽腎訊迅陣靭笥諏須酢図厨逗吹垂帥推水炊睡粋翠衰遂酔錐錘随瑞髄崇嵩数枢趨雛据杉椙菅頗雀裾澄摺寸世瀬畝是凄制勢姓征性成政整星晴棲栖正清牲生盛精聖声製西誠誓請逝醒青静斉税脆隻席惜戚斥昔析石積籍績脊責赤跡蹟碩切拙接摂折設窃節説雪絶舌蝉仙先千占宣専尖川戦扇撰栓栴泉浅洗染潜煎煽旋穿箭線繊羨腺舛船薦詮賎践選遷銭銑閃鮮前善漸然全禅繕膳糎噌塑岨措曾曽楚狙疏疎礎祖租粗素組蘇訴阻遡鼠僧創双叢倉喪壮奏爽宋層匝惣想捜掃挿掻操早曹巣槍槽漕燥争痩相窓糟総綜聡草荘葬蒼藻装走送遭鎗霜騒像増憎臓蔵贈造促側則即息捉束測足速俗属賊族続卒袖其揃存孫尊損村遜他多太汰詑唾堕妥惰打柁舵楕陀駄騨体堆対耐岱帯待怠態戴替泰滞胎腿苔袋貸退逮隊黛鯛代台大第醍題鷹滝瀧卓啄宅托択拓沢濯琢託鐸濁諾茸凧蛸只叩但達辰奪脱巽竪辿棚谷狸鱈樽誰丹単嘆坦担探旦歎淡湛炭短端箪綻耽胆蛋誕鍛団壇弾断暖檀段男談値知地弛恥智池痴稚置致蜘遅馳築畜竹筑蓄逐秩窒茶嫡着中仲宙忠抽昼柱注虫衷註酎鋳駐樗瀦猪苧著貯丁兆凋喋寵帖帳庁弔張彫徴懲挑暢朝潮牒町眺聴脹腸蝶調諜超跳銚長頂鳥勅捗直朕沈珍賃鎮陳津墜椎槌追鎚痛通塚栂掴槻佃漬柘辻蔦綴鍔椿潰坪壷嬬紬爪吊釣鶴亭低停偵剃貞呈堤定帝底庭廷弟悌抵挺提梯汀碇禎程締艇訂諦蹄逓邸鄭釘鼎泥摘擢敵滴的笛適鏑溺哲徹撤轍迭鉄典填天展店添纏甜貼転顛点伝殿澱田電兎吐堵塗妬屠徒斗杜渡登菟賭途都鍍砥砺努度土奴怒倒党冬凍刀唐塔塘套宕島嶋悼投搭東桃梼棟盗淘湯涛灯燈当痘祷等答筒糖統到董蕩藤討謄豆踏逃透鐙陶頭騰闘働動同堂導憧撞洞瞳童胴萄道銅峠鴇匿得徳涜特督禿篤毒独読栃橡凸突椴届鳶苫寅酉瀞噸屯惇敦沌豚遁頓呑曇鈍奈那内乍凪薙謎灘捺鍋楢馴縄畷南楠軟難汝二尼弐迩匂賑肉虹廿日乳入如尿韮任妊忍認濡禰祢寧葱猫熱年念捻撚燃粘乃廼之埜嚢悩濃納能脳膿農覗蚤巴把播覇杷波派琶破婆罵芭馬俳廃拝排敗杯盃牌背肺輩配倍培媒梅楳煤狽買売賠陪這蝿秤矧萩伯剥博拍柏泊白箔粕舶薄迫曝漠爆縛莫駁麦函箱硲箸肇筈櫨幡肌畑畠八鉢溌発醗髪伐罰抜筏閥鳩噺塙蛤隼伴判半反叛帆搬斑板氾汎版犯班畔繁般藩販範釆煩頒飯挽晩番盤磐蕃蛮匪卑否妃庇彼悲扉批披斐比泌疲皮碑秘緋罷肥被誹費避非飛樋簸備尾微枇毘琵眉美鼻柊稗匹疋髭彦膝菱肘弼必畢筆逼桧姫媛紐百謬俵彪標氷漂瓢票表評豹廟描病秒苗錨鋲蒜蛭鰭品彬斌浜瀕貧賓頻敏瓶不付埠夫婦富冨布府怖扶敷斧普浮父符腐膚芙譜負賦赴阜附侮撫武舞葡蕪部封楓風葺蕗伏副復幅服福腹複覆淵弗払沸仏物鮒分吻噴墳憤扮焚奮粉糞紛雰文聞丙併兵塀幣平弊柄並蔽閉陛米頁僻壁癖碧別瞥蔑箆偏変片篇編辺返遍便勉娩弁鞭保舗鋪圃捕歩甫補輔穂募墓慕戊暮母簿菩倣俸包呆報奉宝峰峯崩庖抱捧放方朋法泡烹砲縫胞芳萌蓬蜂褒訪豊邦鋒飽鳳鵬乏亡傍剖坊妨帽忘忙房暴望某棒冒紡肪膨謀貌貿鉾防吠頬北僕卜墨撲朴牧睦穆釦勃没殆堀幌奔本翻凡盆摩磨魔麻埋妹昧枚毎哩槙幕膜枕鮪柾鱒桝亦俣又抹末沫迄侭繭麿万慢満漫蔓味未魅巳箕岬密蜜湊蓑稔脈妙粍民眠務夢無牟矛霧鵡椋婿娘冥名命明盟迷銘鳴姪牝滅免棉綿緬面麺摸模茂妄孟毛猛盲網耗蒙儲木黙目杢勿餅尤戻籾貰問悶紋門匁也冶夜爺耶野弥矢厄役約薬訳躍靖柳薮鑓愉愈油癒諭輸唯佑優勇友宥幽悠憂揖有柚湧涌猶猷由祐裕誘遊邑郵雄融夕予余与誉輿預傭幼妖容庸揚揺擁曜楊様洋溶熔用窯羊耀葉蓉要謡踊遥陽養慾抑欲沃浴翌翼淀羅螺裸来莱頼雷洛絡落酪乱卵嵐欄濫藍蘭覧利吏履李梨理璃痢裏裡里離陸律率立葎掠略劉流溜琉留硫粒隆竜龍侶慮旅虜了亮僚両凌寮料梁涼猟療瞭稜糧良諒遼量陵領力緑倫厘林淋燐琳臨輪隣鱗麟瑠塁涙累類令伶例冷励嶺怜玲礼苓鈴隷零霊麗齢暦歴列劣烈裂廉恋憐漣煉簾練聯蓮連錬呂魯櫓炉賂路露労婁廊弄朗楼榔浪漏牢狼篭老聾蝋郎六麓禄肋録論倭和話歪賄脇惑枠鷲亙亘鰐詫藁蕨椀湾碗腕弌丐丕个丱丶丼丿乂乖乘亂亅豫亊舒弍于亞亟亠亢亰亳亶从仍仄仆仂仗仞仭仟价伉佚估佛佝佗佇佶侈侏侘佻佩佰侑佯來侖儘俔俟俎俘俛俑俚俐俤俥倚倨倔倪倥倅伜俶倡倩倬俾俯們倆偃假會偕偐偈做偖偬偸傀傚傅傴傲僉僊傳僂僖僞僥僭僣僮價僵儉儁儂儖儕儔儚儡儺儷儼儻儿兀兒兌兔兢竸兩兪兮冀冂囘册冉冏冑冓冕冖冤冦冢冩冪冫决冱冲冰况冽凅凉凛几處凩凭凰凵凾刄刋刔刎刧刪刮刳刹剏剄剋剌剞剔剪剴剩剳剿剽劍劔劒剱劈劑辨辧劬劭劼劵勁勍勗勞勣勦飭勠勳勵勸勹匆匈甸匍匐匏匕匚匣匯匱匳匸區卆卅丗卉卍凖卞卩卮夘卻卷厂厖厠厦厥厮厰厶參簒雙叟曼燮叮叨叭叺吁吽呀听吭吼吮吶吩吝呎咏呵咎呟呱呷呰咒呻咀呶咄咐咆哇咢咸咥咬哄哈咨咫哂咤咾咼哘哥哦唏唔哽哮哭哺哢唹啀啣啌售啜啅啖啗唸唳啝喙喀咯喊喟啻啾喘喞單啼喃喩喇喨嗚嗅嗟嗄嗜嗤嗔嘔嗷嘖嗾嗽嘛嗹噎噐營嘴嘶嘲嘸噫噤嘯噬噪嚆嚀嚊嚠嚔嚏嚥嚮嚶嚴囂嚼囁囃囀囈囎囑囓囗囮囹圀囿圄圉圈國圍圓團圖嗇圜圦圷圸坎圻址坏坩埀垈坡坿垉垓垠垳垤垪垰埃埆埔埒埓堊埖埣堋堙堝塲堡塢塋塰毀塒堽塹墅墹墟墫墺壞墻墸墮壅壓壑壗壙壘壥壜壤壟壯壺壹壻壼壽夂夊夐夛梦夥夬夭夲夸夾竒奕奐奎奚奘奢奠奧奬奩奸妁妝佞侫妣妲姆姨姜妍姙姚娥娟娑娜娉娚婀婬婉娵娶婢婪媚媼媾嫋嫂媽嫣嫗嫦嫩嫖嫺嫻嬌嬋嬖嬲嫐嬪嬶嬾孃孅孀孑孕孚孛孥孩孰孳孵學斈孺宀它宦宸寃寇寉寔寐寤實寢寞寥寫寰寶寳尅將專對尓尠尢尨尸尹屁屆屎屓屐屏孱屬屮乢屶屹岌岑岔妛岫岻岶岼岷峅岾峇峙峩峽峺峭嶌峪崋崕崗嵜崟崛崑崔崢崚崙崘嵌嵒嵎嵋嵬嵳嵶嶇嶄嶂嶢嶝嶬嶮嶽嶐嶷嶼巉巍巓巒巖巛巫已巵帋帚帙帑帛帶帷幄幃幀幎幗幔幟幢幤幇幵并幺麼广庠廁廂廈廐廏廖廣廝廚廛廢廡廨廩廬廱廳廰廴廸廾弃弉彝彜弋弑弖弩弭弸彁彈彌彎弯彑彖彗彙彡彭彳彷徃徂彿徊很徑徇從徙徘徠徨徭徼忖忻忤忸忱忝悳忿怡恠怙怐怩怎怱怛怕怫怦怏怺恚恁恪恷恟恊恆恍恣恃恤恂恬恫恙悁悍惧悃悚悄悛悖悗悒悧悋惡悸惠惓悴忰悽惆悵惘慍愕愆惶惷愀惴惺愃愡惻惱愍愎慇愾愨愧慊愿愼愬愴愽慂慄慳慷慘慙慚慫慴慯慥慱慟慝慓慵憙憖憇憬憔憚憊憑憫憮懌懊應懷懈懃懆憺懋罹懍懦懣懶懺懴懿懽懼懾戀戈戉戍戌戔戛戞戡截戮戰戲戳扁扎扞扣扛扠扨扼抂抉找抒抓抖拔抃抔拗拑抻拏拿拆擔拈拜拌拊拂拇抛拉挌拮拱挧挂挈拯拵捐挾捍搜捏掖掎掀掫捶掣掏掉掟掵捫捩掾揩揀揆揣揉插揶揄搖搴搆搓搦搶攝搗搨搏摧摯摶摎攪撕撓撥撩撈撼據擒擅擇撻擘擂擱擧舉擠擡抬擣擯攬擶擴擲擺攀擽攘攜攅攤攣攫攴攵攷收攸畋效敖敕敍敘敞敝敲數斂斃變斛斟斫斷旃旆旁旄旌旒旛旙无旡旱杲昊昃旻杳昵昶昴昜晏晄晉晁晞晝晤晧晨晟晢晰暃暈暎暉暄暘暝曁暹曉暾暼曄暸曖曚曠昿曦曩曰曵曷朏朖朞朦朧霸朮朿朶杁朸朷杆杞杠杙杣杤枉杰枩杼杪枌枋枦枡枅枷柯枴柬枳柩枸柤柞柝柢柮枹柎柆柧檜栞框栩桀桍栲桎梳栫桙档桷桿梟梏梭梔條梛梃檮梹桴梵梠梺椏梍桾椁棊椈棘椢椦棡椌棍棔棧棕椶椒椄棗棣椥棹棠棯椨椪椚椣椡棆楹楷楜楸楫楔楾楮椹楴椽楙椰楡楞楝榁楪榲榮槐榿槁槓榾槎寨槊槝榻槃榧樮榑榠榜榕榴槞槨樂樛槿權槹槲槧樅榱樞槭樔槫樊樒櫁樣樓橄樌橲樶橸橇橢橙橦橈樸樢檐檍檠檄檢檣檗蘗檻櫃櫂檸檳檬櫞櫑櫟檪櫚櫪櫻欅蘖櫺欒欖鬱欟欸欷盜欹飮歇歃歉歐歙歔歛歟歡歸歹歿殀殄殃殍殘殕殞殤殪殫殯殲殱殳殷殼毆毋毓毟毬毫毳毯麾氈氓气氛氤氣汞汕汢汪沂沍沚沁沛汾汨汳沒沐泄泱泓沽泗泅泝沮沱沾沺泛泯泙泪洟衍洶洫洽洸洙洵洳洒洌浣涓浤浚浹浙涎涕濤涅淹渕渊涵淇淦涸淆淬淞淌淨淒淅淺淙淤淕淪淮渭湮渮渙湲湟渾渣湫渫湶湍渟湃渺湎渤滿渝游溂溪溘滉溷滓溽溯滄溲滔滕溏溥滂溟潁漑灌滬滸滾漿滲漱滯漲滌漾漓滷澆潺潸澁澀潯潛濳潭澂潼潘澎澑濂潦澳澣澡澤澹濆澪濟濕濬濔濘濱濮濛瀉瀋濺瀑瀁瀏濾瀛瀚潴瀝瀘瀟瀰瀾瀲灑灣炙炒炯烱炬炸炳炮烟烋烝烙焉烽焜焙煥煕熈煦煢煌煖煬熏燻熄熕熨熬燗熹熾燒燉燔燎燠燬燧燵燼燹燿爍爐爛爨爭爬爰爲爻爼爿牀牆牋牘牴牾犂犁犇犒犖犢犧犹犲狃狆狄狎狒狢狠狡狹狷倏猗猊猜猖猝猴猯猩猥猾獎獏默獗獪獨獰獸獵獻獺珈玳珎玻珀珥珮珞璢琅瑯琥珸琲琺瑕琿瑟瑙瑁瑜瑩瑰瑣瑪瑶瑾璋璞璧瓊瓏瓔珱瓠瓣瓧瓩瓮瓲瓰瓱瓸瓷甄甃甅甌甎甍甕甓甞甦甬甼畄畍畊畉畛畆畚畩畤畧畫畭畸當疆疇畴疊疉疂疔疚疝疥疣痂疳痃疵疽疸疼疱痍痊痒痙痣痞痾痿痼瘁痰痺痲痳瘋瘍瘉瘟瘧瘠瘡瘢瘤瘴瘰瘻癇癈癆癜癘癡癢癨癩癪癧癬癰癲癶癸發皀皃皈皋皎皖皓皙皚皰皴皸皹皺盂盍盖盒盞盡盥盧盪蘯盻眈眇眄眩眤眞眥眦眛眷眸睇睚睨睫睛睥睿睾睹瞎瞋瞑瞠瞞瞰瞶瞹瞿瞼瞽瞻矇矍矗矚矜矣矮矼砌砒礦砠礪硅碎硴碆硼碚碌碣碵碪碯磑磆磋磔碾碼磅磊磬磧磚磽磴礇礒礑礙礬礫祀祠祗祟祚祕祓祺祿禊禝禧齋禪禮禳禹禺秉秕秧秬秡秣稈稍稘稙稠稟禀稱稻稾稷穃穗穉穡穢穩龝穰穹穽窈窗窕窘窖窩竈窰窶竅竄窿邃竇竊竍竏竕竓站竚竝竡竢竦竭竰笂笏笊笆笳笘笙笞笵笨笶筐筺笄筍笋筌筅筵筥筴筧筰筱筬筮箝箘箟箍箜箚箋箒箏筝箙篋篁篌篏箴篆篝篩簑簔篦篥籠簀簇簓篳篷簗簍篶簣簧簪簟簷簫簽籌籃籔籏籀籐籘籟籤籖籥籬籵粃粐粤粭粢粫粡粨粳粲粱粮粹粽糀糅糂糘糒糜糢鬻糯糲糴糶糺紆紂紜紕紊絅絋紮紲紿紵絆絳絖絎絲絨絮絏絣經綉絛綏絽綛綺綮綣綵緇綽綫總綢綯緜綸綟綰緘緝緤緞緻緲緡縅縊縣縡縒縱縟縉縋縢繆繦縻縵縹繃縷縲縺繧繝繖繞繙繚繹繪繩繼繻纃緕繽辮繿纈纉續纒纐纓纔纖纎纛纜缸缺罅罌罍罎罐网罕罔罘罟罠罨罩罧罸羂羆羃羈羇羌羔羞羝羚羣羯羲羹羮羶羸譱翅翆翊翕翔翡翦翩翳翹飜耆耄耋耒耘耙耜耡耨耿耻聊聆聒聘聚聟聢聨聳聲聰聶聹聽聿肄肆肅肛肓肚肭冐肬胛胥胙胝胄胚胖脉胯胱脛脩脣脯腋隋腆脾腓腑胼腱腮腥腦腴膃膈膊膀膂膠膕膤膣腟膓膩膰膵膾膸膽臀臂膺臉臍臑臙臘臈臚臟臠臧臺臻臾舁舂舅與舊舍舐舖舩舫舸舳艀艙艘艝艚艟艤艢艨艪艫舮艱艷艸艾芍芒芫芟芻芬苡苣苟苒苴苳苺莓范苻苹苞茆苜茉苙茵茴茖茲茱荀茹荐荅茯茫茗茘莅莚莪莟莢莖茣莎莇莊荼莵荳荵莠莉莨菴萓菫菎菽萃菘萋菁菷萇菠菲萍萢萠莽萸蔆菻葭萪萼蕚蒄葷葫蒭葮蒂葩葆萬葯葹萵蓊葢蒹蒿蒟蓙蓍蒻蓚蓐蓁蓆蓖蒡蔡蓿蓴蔗蔘蔬蔟蔕蔔蓼蕀蕣蕘蕈蕁蘂蕋蕕薀薤薈薑薊薨蕭薔薛藪薇薜蕷蕾薐藉薺藏薹藐藕藝藥藜藹蘊蘓蘋藾藺蘆蘢蘚蘰蘿虍乕虔號虧虱蚓蚣蚩蚪蚋蚌蚶蚯蛄蛆蚰蛉蠣蚫蛔蛞蛩蛬蛟蛛蛯蜒蜆蜈蜀蜃蛻蜑蜉蜍蛹蜊蜴蜿蜷蜻蜥蜩蜚蝠蝟蝸蝌蝎蝴蝗蝨蝮蝙蝓蝣蝪蠅螢螟螂螯蟋螽蟀蟐雖螫蟄螳蟇蟆螻蟯蟲蟠蠏蠍蟾蟶蟷蠎蟒蠑蠖蠕蠢蠡蠱蠶蠹蠧蠻衄衂衒衙衞衢衫袁衾袞衵衽袵衲袂袗袒袮袙袢袍袤袰袿袱裃裄裔裘裙裝裹褂裼裴裨裲褄褌褊褓襃褞褥褪褫襁襄褻褶褸襌褝襠襞襦襤襭襪襯襴襷襾覃覈覊覓覘覡覩覦覬覯覲覺覽覿觀觚觜觝觧觴觸訃訖訐訌訛訝訥訶詁詛詒詆詈詼詭詬詢誅誂誄誨誡誑誥誦誚誣諄諍諂諚諫諳諧諤諱謔諠諢諷諞諛謌謇謚諡謖謐謗謠謳鞫謦謫謾謨譁譌譏譎證譖譛譚譫譟譬譯譴譽讀讌讎讒讓讖讙讚谺豁谿豈豌豎豐豕豢豬豸豺貂貉貅貊貍貎貔豼貘戝貭貪貽貲貳貮貶賈賁賤賣賚賽賺賻贄贅贊贇贏贍贐齎贓賍贔贖赧赭赱赳趁趙跂趾趺跏跚跖跌跛跋跪跫跟跣跼踈踉跿踝踞踐踟蹂踵踰踴蹊蹇蹉蹌蹐蹈蹙蹤蹠踪蹣蹕蹶蹲蹼躁躇躅躄躋躊躓躑躔躙躪躡躬躰軆躱躾軅軈軋軛軣軼軻軫軾輊輅輕輒輙輓輜輟輛輌輦輳輻輹轅轂輾轌轉轆轎轗轜轢轣轤辜辟辣辭辯辷迚迥迢迪迯邇迴逅迹迺逑逕逡逍逞逖逋逧逶逵逹迸遏遐遑遒逎遉逾遖遘遞遨遯遶隨遲邂遽邁邀邊邉邏邨邯邱邵郢郤扈郛鄂鄒鄙鄲鄰酊酖酘酣酥酩酳酲醋醉醂醢醫醯醪醵醴醺釀釁釉釋釐釖釟釡釛釼釵釶鈞釿鈔鈬鈕鈑鉞鉗鉅鉉鉤鉈銕鈿鉋鉐銜銖銓銛鉚鋏銹銷鋩錏鋺鍄錮錙錢錚錣錺錵錻鍜鍠鍼鍮鍖鎰鎬鎭鎔鎹鏖鏗鏨鏥鏘鏃鏝鏐鏈鏤鐚鐔鐓鐃鐇鐐鐶鐫鐵鐡鐺鑁鑒鑄鑛鑠鑢鑞鑪鈩鑰鑵鑷鑽鑚鑼鑾钁鑿閂閇閊閔閖閘閙閠閨閧閭閼閻閹閾闊濶闃闍闌闕闔闖關闡闥闢阡阨阮阯陂陌陏陋陷陜陞陝陟陦陲陬隍隘隕隗險隧隱隲隰隴隶隸隹雎雋雉雍襍雜霍雕雹霄霆霈霓霎霑霏霖霙霤霪霰霹霽霾靄靆靈靂靉靜靠靤靦靨勒靫靱靹鞅靼鞁靺鞆鞋鞏鞐鞜鞨鞦鞣鞳鞴韃韆韈韋韜韭齏韲竟韶韵頏頌頸頤頡頷頽顆顏顋顫顯顰顱顴顳颪颯颱颶飄飃飆飩飫餃餉餒餔餘餡餝餞餤餠餬餮餽餾饂饉饅饐饋饑饒饌饕馗馘馥馭馮馼駟駛駝駘駑駭駮駱駲駻駸騁騏騅駢騙騫騷驅驂驀驃騾驕驍驛驗驟驢驥驤驩驫驪骭骰骼髀髏髑髓體髞髟髢髣髦髯髫髮髴髱髷髻鬆鬘鬚鬟鬢鬣鬥鬧鬨鬩鬪鬮鬯鬲魄魃魏魍魎魑魘魴鮓鮃鮑鮖鮗鮟鮠鮨鮴鯀鯊鮹鯆鯏鯑鯒鯣鯢鯤鯔鯡鰺鯲鯱鯰鰕鰔鰉鰓鰌鰆鰈鰒鰊鰄鰮鰛鰥鰤鰡鰰鱇鰲鱆鰾鱚鱠鱧鱶鱸鳧鳬鳰鴉鴈鳫鴃鴆鴪鴦鶯鴣鴟鵄鴕鴒鵁鴿鴾鵆鵈鵝鵞鵤鵑鵐鵙鵲鶉鶇鶫鵯鵺鶚鶤鶩鶲鷄鷁鶻鶸鶺鷆鷏鷂鷙鷓鷸鷦鷭鷯鷽鸚鸛鸞鹵鹹鹽麁麈麋麌麒麕麑麝麥麩麸麪麭靡黌黎黏黐黔黜點黝黠黥黨黯黴黶黷黹黻黼黽鼇鼈皷鼕鼡鼬鼾齊齒齔齣齟齠齡齦齧齬齪齷齲齶龕龜龠堯槇遙瑤凜熙々〆ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const WT_W='7b5j6d6h6s6t7a527i7a9jcy5y7q6485709b95c0atbqazbo5u6xa4aw6r7q9mai6r819da9asbj9aa29vawa1ay5x7m8m7g8d838yb890dlcjbncbd2daa9b5bd8n9n9v667d7hd0dgdpbfb5atcoa97s9x94bu6s989a8iaxat9k7wavc7c6b68n95827e4a5h4b6b845a6p748w70977j9s9yay9laj8i9h8a998x9x9jaa768d8u9sa2b26n7ea4b3909t607q8f8q9c697g7o789s9u557j8j8q8h9h9n7l8i8i617b7fadbbbh8o878l85a86r916m8r84ao8s799g6waz6t8panad9d6i9w7m6c9lbdb7a8364egxh7g7fff1gegbg5gmh5hwichhifh5fygme4hffedtgogkfegvdygtgwi3gcgfhrfaewhegfhehfi2htekbtecdnfagvi1gzgpheh1gsg2gpfggefbg5gtfvhzhyfdi9dwi8gpgoh6dkebg6f9gviw4afgfifzhkf1daipc2dvgsg1hdi8c2g2eigghtglgvhjiacvd7cterexe3gzdziahee2hkdjfjh0fyi3h5ilgzi2gpdlh9gqd2hchhfmhmhdfch1ffg7fdfdcrdhfjgdgti2i2g4gog0hjfmg4fqgxfohnibhthgikdliqhbg0ghgdfjgqhod6fpd7gahggohzhvihfuhugmgggngcdvctgzdxdzg0e6e0fherhsgdhec2fhh6fyhogpgucufjgzhjh2iohzdraggzg7fqfvhlf78ubvflefh3gtfmfcckhngkhbg3h5e6hrgbgagvdma3f3gqdphkhjdpepgafxhchohni7h9f0gtg2hlffhkhegscuhtfkfdhefyi9iuh0a9ebgyh2h2hahefcg5gsg0i3g1foesgxguh3fie5ejflh1d6idi2hoe9hag1ckfkgkh8i0i9fwh6hyfkgpijh5fqi4gnfbfth8gohwhuekhcflgug2fmhcibhsicf5enhngug9i6hof9doezg5i8i2foeyhhhnhqhdfkgtg5eyfue0f9fcgih0ijdwigbcgbhyi8gdexgxhhfuj6h0hsg6f6glh9cwe8e7ggfdgbgbdqhmhfgeg9goghf0ejgiacg4fugph3hrgjhbgjgygdh0h8b6gagxfzhddhgrh1dsgfgyideeihf0i8hbimi5frhiiyhihshogsi1hvhvbzdxfgi9elgrhpfuhlhxilgvhwiucwevezgdhphcfahug3fcfdhqe9hbevhbhihxgrhuiognhuerbqibe7f3h0fxhxgtfgfmgqggi6glhdfog1gji4fuewiffhhwh0iqhggligifh7ivgph1ide6e7g6g1hhgsf1dsglfdg5ilg5ffcfa7dcdzdvg3ezbsevgudqe9eucvd2fmf6h7g2h8feghf6bae1glejg1h1fggygiewh7j5fgh6f5cleldwevfghrebi6dafeg2g9hpdhgxghfrh8ief9f2f9fwhfhxdveogni0hsfkgjhei1iji4hthhetglfmh2hwfrgqhhd8huehhjhndpboi1alexgbfwgjfuh4h9dghqdih1igdweod4idadfscyeng3drg5fihuibgyh5eqgug8gaevhdg4h0hvf9i7hch5ggi4hdf2htgwgsg8hzf5hlhmgzhsh0g5i8gzh7gghbe5h8foffh9fld5gceofjgbgae8fdfwich0hdgvgzhafpfzeqg1hqeqh8ikhfgkgogggbd6h8ghhthwhvfwfahoh5hmh0gxgudzhfbydkgcath0exgdd4d4g8h2ighdfxgag3inh9iniagshig4hegjhfg8buhmfqhhi4fxgrevirgff9gtj3h0ijhxiccaghhrd0fzghgndsgugsgrecheh8cahecwe8hpfmgfbwgxgjbzftfjg9gqihf3hggdhbeugsgyglhwinhecldgedajetf3h4fzhtgwgwhjgwh9hkgyihiyc1iodfesgbgtfmd3b2daf3cxgkbve0engvdyfze2caejfm9tcfgje6d3gwhde4gogkenf3gge0fegcgfeyf4hpi6b1dqf0g8h6dnglhkhjjdezgog7ioh7djegh6hofhgafnc0h1j1fgj3fkhugtg2ixhtgefig4fffphjfndkcsgsfyg3gui0igecfcevi6hxj6hpglh7hojji1emg1emgdchehfvamhnefhti0gthffvg4gmi8fjgfh8emgvgdelcifwgwd3geglbugsejeshzfiesgpgagnhbg3h8gpi4hrf8enapfthbh6eud8f7greth9ggg9i4gkhvi7higrdoeph9fgdffqgkfygdfyf5g7fjgmgyczgvdcg6ebh9i9ewhbgiicg0h8ftgjguhah0fvi8h3ceh8ifi6f4ichsiegnfkhj9qeseobgfui1hlgjgyikghgnhvi0iegticgzg8g5gncecrfhg5fzdze0i9fba1fwggfqakhed6grdnf7gedlevghh5evfnaxesdmiietehd9h5gjh3htfagagtgcg3glgvfsihihhthcg6ehf7dtcydxg3fbg0cafwdnhuiefwhhcrgzf6eogtgnbrhtdhighed9hucuf59xd9gedxheggg8g5fhftfrfohghsgkgudphug0hweqeafkgdgnfvgfdgf6fmi3fzgpfagags9mc5e7djgzfsg1icg0gcgvgucdgfclclefg6f7fqj7jnirgsg8i4flfogdgfhhhwhng4fag3elhgeefqfvfhfnfmeqfnjfg4fmdtgofsi7giimi7h0gxilhai6ane6dy7qf0evg6a0dbi2hzhih8fiflglfzfti6hqhcg4djfsf4geg6h2hvgcgbi1eyhgdqiefue8fmgwh3gpfyhchwhneufleohdigfyfoi7hqh5i3i5i4fqgkcoekf5foifg4h4gziofjbvdug8h3gzg8grg5hzf6f89dakejdqevhlflewe5g4g2hwf7g3gdggepgzgxhge6f1e7gtgqg3hafhesgri3evfkg7f9hegydth3g6gyh2hgfpg2gzg1fxfehpgxjcj5heip8rbgejh9cnh8gwgqh9icfhh7hrfgeie5eah8i6gaibj5hdhvgnhjfeh2hlhvj7j0e6h2fbh7gbf7f6ftgugahxh8i09sgsheg9h6ghhxfcfjdvf6fdfbhcgpfvczh5ieewetcugreei57ya1crikc5fngnd2fqg5eohiibfzidfpfxhrhjgje2hsfkgychegiufwfjg9gdgwihizhuhqidftg9i1gai8iti3cmhkg5hwfmhzg7hj9jeihpg3giggh1gjfzelf2g8fnhsg9gshzhjcwfefvdahri3hgdrhfgmhxfrhng7j1fahjevgpi8glg8glgtckfkegddhsi9iff2g4ekh4i8h9e9g6h3geeagrfxgygzh0hce2hedudj9db8fefocmbai5hehnfjgcfhffelfagjfjhzgxftgmhwj5g1ibe3gmiqg9hvhshki2i4hmg7gyfpgjgpfgdhgsiejfjbgkhtgoh1f9fxhigeh2h8i9g6gthrgchkhngagyhyg9h3h0eoi9fpggczgqfteuhgg1gfgihlguh4hogrdnh8gvh6ieh9h1e7hlgofqjlgth3gxfmeuh8grgvgcekfhhgighvilh2grh4jui8icgcfjh4fygneqfrfcgdebgof3h7hggehnd6gnf8hadygbfzh0dqhbfgcuc4ctfdgwhbemgwc7elfph0exgliaeqg0dggsejfvfge4gwichhg8g3griyffgsfngagthih1ihcocxargpiti5hlgji9e9fxeadmfcfldfgqgmf5iogphpgafvhlbhe5ffgpgqgghch1hdezifdci1i9hqi4d4f8hcf8g3h3dhhfebg2fpgshoggh5gch9h2hzi8gugnh4gui6hkgefjgwgtfif7gffsggefgyhdhsgkgvhahhhagpc3fli0g5g6hef6i6h3bwdsf3e1grghf0cuegfrfegdi9gjgkhuhhdghtez8ceafjhlicfghhc0dkh2fth0h0goiohzhkine1hli3ilj3i7i6i2hghehqfefuf6gvezgjgsd7dwfti2hifdhgh0h1fkhphjgzgmh6hlhvgxfwftcagui9h9hofqdki6imhmbodsfpifeffqfkfkh2e2f0gneqeggih3fnfigzgngih1h29qghg7h3hmhbd6hehdh1gmhreehnenhxibhug7emg5h5irh2fdhoi0iwfqgwggg2dahperf9jahyftgciccye0i2hqfzgvf7d2gxg1gbi6fh9wdegng2gbiig6hmj1gghkfsge9vf8g0gyf7clfnb4gyg3hrgdfpffgpfwfwglg8gth0h4g9fag7frc7h1ebglh3g2f8gqj7gzfxhwgri0eiijeehug6giijgohfj6i3iahzftgbfxhri2g3j4hkieglgiibdtglhzg9gpf9fwg7emgmgegshagihfbpfqhjhdg8e2fyhkhbgvd1fpgte2idhohafbguh5ejh6daawfni8hxiaghidi3i6iti6gshlgljedf7re2e7escnhxf0e7cid0e78mf7fxggdqf1ebh2gziqeqfbgfhugid1dyfrh5h9gmbni4bag9hsgohhh6gzi9k0i3hph2dmgui1izgjfcedhigvgxgzfufvfuhfflfzgndvfbgtezhagmh2g4fjhpgxh7glgufvfnh7gsgei1f5g7fuezgiglfyg0drdsg2gth5gjf6i2g2hyi5h2h0g8gzhjgihqhcgjibingph8g18xg8g3fyiogkeugbfzgchwgbghg4gbf5dzf6cce6hjgdhtg3ghchczh1fjg1ffh8gwhqh7huf5gxhfhog5gsh3hjhziggyhcehemeyfmgjfrh6flgwgscie9gvf3gjgthbhxhvh3gvgzhcecgqhxiciggrh1fig7h6h9h4fhewgremdbfuexidhsf1hpd9h6hah8fshghyh3elhfh3fihtcxgfivgzgffsfci0h7gdewfxipgoh1gwiyf7eyhcdyh8fgghhsh5hab9coffd5hjgdg6dnfafremhxdtg1drbeebh5fzfxi8ekhif1e2g0gjhxfehgh2iegwesi1h1h4hrdqi0g8hyiihmijgni6gmg0dgfqc9glhbc4fhg5gcgkf3fegpgchxgbfwcbi0exf5dihcfrbqg1gxfii3hkgye0fjhhhjhchqf9h2hwgmibfubghpjfe3gbi1gvh2gud3j1fyj9jbivi6dwh4hxjbiahehyh6dhhyf7gfgih6ghdvenhpfqegfpgdgwglfygwfsbph0dteddhgyi4hmeegfhigogkfxgxfdhchihyjdcq9qg2g2e2fbiecyc6g6h0gyfogwfhgagqhehxhbftgrfhebhnczhi6ththucjfci4h0gog6e7fmhqhvffd7j6bkfegui3i4ghglg2g9f9foh3gzhmi7f9ibfii8gfdzgbbifidoe0eyeqhrhubkh5gwg4i0f7dnhhcng9fmg6hpgchngjhnejggfhhwhpg6h2dhd8hqhzg3hth4fyd5e6gdhefuhagygwdhgqemgohqj2hfj3hehqfofge9dpgyeiiofzhti9bth6elesdmh7cng4hffuh2h8g5dqdbd7d0fkgog0gyfedbf6f7exhpg0izgfh2hwikgafvevh7hni6giethog1djg0hufrh7hkedguftgcilh5f1f9fjhfghfaiai3i29xb7e0bmfzgxh4ivfjfefzhmhhhlhrifhkh7dff4gbffgocxixhwhahqhwimguhxhng0fug7coe7gli0eej3hnhef2gmi0hgedhdgni3egfuhgj5gohhifg5eofji3engchegvgfhqhbgij8hdgneobuhcg3gyi0ewgcfwg9gsgehagiiifqg8g6gj7ofogrg8exgyetfxe8hkhjhshdj8enh4gzgyhfhgawhbgzifepffhcggiai8i1i8jehhgzfyg7hxc7ecgmcsh3h6edepbxepgjiefphdjchlhvhregdzf9hdhzehhcgngzipichnhuh1ikdug2hne5h2h9hweahhhsffhhhfibf2i1dshah5eohmhkgm9qjfgggchnhnh7ffgtgchhi8gqecgue7emhjg0h5hvgofiguicarc4d07ydh2je14k9wfrgwg44whgfeg2cja9f2gt4zbteugjg1bldrceandgdnf4fdbvd2dxeuehgyerdncxfdexfnevg5gdfgfsemewfdi9g5g0f9esg3hkh2gegnglg3hdi0frfpelduh5hdgcfnfzgtfdhghqh4fhgyg9grgjh6g8h6h3gigtgthdeui5h7hzh2h7hji0hlhqhhhzgjh3ifh8gehhh3hrj5ixidhr98bhdpe2fdhlijh1fsb3h9a8fzgpedgcf1gxg550h0h0ggg9hn3bd6dvcicjdcf0g0djfhach1fledhz9mgudkdbf3frfqi4g4fmfihbgcg3ggggh8euh5hbgjibhjgbhohphlgugpgni2ftg5fug9grgfgngdh9i4gqhbhtisho8feof1evgfgrhq9z9sgvi4hrhp9eghc9eje4cbcbf5928qfle9fwgc6zhjhnhhhli3ip8uefhfhlfwguhebuepdgcwcpdmfodzehecesfbe8feehewetfjf9fxfif5cvf6fufxfvfaftfcelg2g7eofaezeofugyetftf9ejf8h6g9gggsftfohefwfhgzgjflfwgpfrfjfff0gyg8g5g1fsgpgvfzgih6gufufegoglh4fvgfgagzgpgth5gggmgsgigug8frgzgggyh4gmgmhkhigkgohih9gdgxfvgjh5h3h4gnhiguhwgygwgzhphoh8h1hzhhcjhlhrici4iji5irioidi6ililhgiqcgbvehe2d0djcsfkhxfkg2etfeemg7dwfpezdpfbfxh9e4eqhcf2e3i0h7glgmh8gbghheh2gkgkhlhvheh5gcgxgwhdh4hki5hfh4hshrh5hyhfhhi3eeh5gygahlhvbzclfqdof0hudjcrbzdre4e3fgfbgaglg6hihbgphtfmdxefg5gfg5g5g1hjhxgzg6gjhbi5h8faikh7i0hdgnhdibh3gygvizhxiji3i0hni2i8hmi1icimioidhwhgj4ichrhaiqipjbilakdfd0edfafmh1f5h4fnewi25lbyfvh2gtgogogph8idgpi6gmfnfzh8gugjg7gfgcgdbphobyeo9idigah2gtgxhcghg5hoapcydgekfmdbdogugpfsg7exgvf2exfjexhdf7gvgdggffh4h2gcfvguhmgngdfmgngwgtgjehhii3gbhihigmgkg3gtgrhqfuhghthygghfirhmh0i1dofhcggnf7fpfxeqecgrgzj0hbgsh3iwhwikiififccdd5bngu6pfhgzhjh4hohkgrhchih0hxhki2hyhshmipiqi59ghjbneof8gygp9bh3dig0g3isgxhpjfggezbrgah7hh8wev6se8elfhh3h3gag2f8f0fuflg1h7ghhtcvdqd0g3etetgoe3epfof0f5gadneyflfjhkeefheugffafsf4g3h2fwg2edfhgtfufigsfggnfwh9hmglg8gcfqgagbh3ghgig8hbhaenebhyhkgvhjhog3emhagtgnh8hmgdgahrh6h6guh2glh3h6ibgdh1h0h4h3frhnhci0g0gqhmfzhqhah3heijh4hmiyfugphbh1h8h7hmfxi3huhahchbhbi0h4gnhbh4hmhohmgiiwj1ishki7i3hwh4dee5ehedghgsguini7hdimi1inh6bedaetdbfgg7gqehfeffeag3dcg0cqdngrfzffgbf2f5h9ewgfepfihfh0goehg6fxfkhofxfugaf8gyfxg7hjgigtg7gwhphtfvgcgcg2fufzhggxh7hegjhigjhjhqhdh4h1i6gwi3hdi0hlhrh6hoghhjgshrhshjhpgph1hehsh0h1h9h8goi5iyggghguhnfehcgyhthbi6iki2hnhpi6i5hqjagzhuceckeyfhfkfufch4gpgkgvhahth4idgri0i3fzh3erh7h9hdg1gwgxhtioizdhe7ewfngfetfufpgsgjg2ghh5g9gfg0gygzgxgxhcgxfygpg2gvh1h8h5hvgygzhshnh9h5hxhchchuibfhibhjdafmg0hwicgijok7hvdff5eodmerf5d7ekdhduf6f6eld8emene9f4ewemf8fihof5g0g2f6gufjgheefhg8geg5fpeqgghffqh5hrgkfvgogfgdfyfggogjgag6gfgbhbh5ihgphjfkf7fggheqgqgahdg5h2grhxidhkhpg7h9h5h2fwhfh8h1hrh9gygigwfsh8h3fxhahbhahvhahih7hgh5gvh8hngfh5hnhzhpgnhbgthdhoh6hdhcgugzgmh9hhhohshvhlhnhehdgsgjgohshlhuhqh1ini4guhnh7gvhshci4i1h6hbh9i2h7i2hshihmibhlhnidhci1hqhwhihqhfhni0ghhzhmichmifich2hbi2ihichthairioi2hlhthsi6i0i3j9gah3fwgufxhjhbijgvhbgxghglhui9bgfvezehfyf9h9gbgyhkhgheh1j7ivdjheguhmezi5f6gsgdgsgbhoh1gdasflgyg1fddbb7cdc1dvcobsdtd2e7epdzcyfne7etdffnfed6ehcocvfxd8fid1fgg4cxeqfidpeeeme2g3ftfne6ezf9erehfag5fgfseyfwg0gvgxeyfngtf9dhfqfmergjfig1ebf5flfqfdfyfwekfeg1flfwfrfafxfbg9e8flg2gfggh0fygdgufzgnfph4eng7h1fxfqf1iuh0g7evf6hiheguh5f5fqgvexgggpgugufxgag2gjgqfzfkhdfngzhbg9gggih1eoh9icfvg4frflg9g3fgfkfag1g2i3fbfwhggffnh4hwgwgqhbghgshkhjhngwhfiuifh6i8ghdldnh2h7fidygqg2hdejfhfofzfsgvg9gbg7gtg7gih7hdhdh6hzgagog1gfi6g2hxgwhfhxg8hghagqhfikg4hxhthmipi5ezgkgzgac4ge9oftiyhbi4gjh7g4figdhngihzihg4elgkfhewgfhigohefmglhhgsgignhfhufuhghxi9hvh8i0i1gbhkhvihgyiiimhkj5gtf2eagkfng0grfyhqghhhg2gnfqevgxgrhhh6gtgphhgxg7h2gkhyg1hkhwgoiah6fshiimeofkg6h6grgwhggihlheilgvi6hphzhsg4hcfzdqfverg9f7ekfdh4fwfugfhagfgsgoinhchcgzhkh5c7eaf0edfkh9fufpg8g9fyfmgohrgifyh3gcgrgthph2fmgcgjgjgfhjheh7hghegkhjhphohahnhyhohagshphshlhuhfhzhrhthdifhs89ffg5esebgifofagagvg1hlhkhzipiligeth3gbfkguiegjh7hahjfag1fcgfgjhhfffwgzgkgygbhvieh3iohmh3fygii9hti5hkhnibidhphrhahahki6ilhohvjaezfch6dagrg7iigkivg3fggnh8itgkgvhhgqhxighohfhyhtirhrguhuhzhrhkhthohsiei8hwiii9g4gdgleyesgbgmh2gth4hpi7gyhmi5i3fsg6hufxgdgfgrg4glh9hdhyi1gzgahpgwghhyh1ijhzi7iwi2hsinelfkgggzg7hlh4gggzh6hzhlh0hwhegdi3c7d8f5f4evdiemghfwglgthuf2frdufngre5fhfnf0fofogngmewf9fogbfuhufwh0g2f0fzh3goh6hph3hwgogmhrgsg0fjifh4h3hhhmhngxhhi2hni7h2i7i4ghhpgxhjh6h9hxhjgjh0i4h5h3i8gmh2hmi3hnididipi0igi7hlizdngzfsewgqg0ihichvihgzgki6gphbhfi1iti3jqhkivgwitjyimjddxf2emflgtg0hwgsf9hwg6erg8h5h8fygmhxg6hsgwhphsh6h7hbhbhfh2igh2iogzikhyikhihli5iahziehqiii3i3hoigixhsi1h7i7i2iribhvjhhiikhki7izj3iyiaiaiejej1ieivhxididj2jcivhqhci9hoiiiqizi7jeisikijjrjbhij4etgwhyhdhsidj4gfeigcfigqhthsghh5geikhgi7j5igf4fihqgwfmg1hyhxihhti4hchpi6fkhjghhyhogujxhvi6k6gmgshxfbfagxh4i9ilfofxhhgahahpgbh1gxh6gshji8h4hlj4g1hfhqhoeie7euhdf3gshlfjfehmfjgmgoh3hghai6gygfjgichciohshuifhdjgisiujehoikioibiag6i5jfitj7ihizicjlhriuixiwggg9h5hui6j5ipjuj4jbjxhhhnhii5exf1gegzg3hgevhfj4fqg9gjhygeiui4i5jiiwiyihigidirfsj0iledcbcpcyezfhfee1dzgaewg6fweygdh6f8dvecgdfrg2gceuh1gxg4g1gefeggfrflf2dfeyggfdh1i2ftg6gahce7gifrfpgng7fxh7fvgfhph9hmgsgoexg3i3gchjghgqfifeg8hagig6gvgchifufifrh5hgh2h9h6g5hfguh0gahsg7h4i6i2gpgjhph3hxgqhmi9hgh9gngyh6gth3g2hohegxg7g5i7hbhyhkh9hkgxioh1i5gkhqh4i5i1hph3ichhhph7hqhzikgej3hdhlilhlivhchsipi4i3i2higvi1hri4ije2gjfyhwhygcgffegwetgsfnh9fmg5h9h3fxijh2hggogthnf8gogsgxhch6hmhygdi5fngfi8guhpgxhuhoglhhhhi6hrh3gphghihwhfh5ikheh2hpifhlgshohqhbgig8hciqhvh8hjinhzi1hghwikhlhuhjhli7hdh5hki3iohyh0i0ibhkhfi5h5h3fyg2gyhvc7fkfdfufrejfdg0f9dxg1f4g0emg2g8h8ffg5eiebgygthhh2gzfqh5gqg9hlhqh3iqgqgrhbhoh6hvh8hkgph4hqhfgshzhzhjhahhi1ieicgudagniljef3gqhuilihifj5iufwgxiej2h9gmh3geieimddfke8dzgagjh3gdg5h1gagzfoh0hchegnh1hgh7hohyhdhhighihigogxh1gui5hohph0hoi6h8hti4iuhehjgnhfh7iahyhohmiai0gmifi5i4ifi8j1ibhvihiaichxhbgci8idfwhzi0j1iditj9isibgsi5hifzh4hghefmgrinbzfah6h0hahbi6h6ibgkidgrgoewghfxf1g1fegifhi0gjh1hhj4i7gagwgwh4hbi8jfh2i6gjg9i2iqiie3gigci4glfpg0i2isgughhfhbhpgshxgeiehnhrh3igiyi7hnhqiwihi9i0i0idi8i7hbhehpi0gviqiciji0ikhoioihhnhei5idj3j5j6j6igg8gij6hpi7j7imf1i1h3h8grg0gwhnhuhri3ili6j0iiicidh6igj2ihiohxjdikihjjiziqivizizjbgagmhahnhl9if9gfg3fuflibgugfghh3g6gugjg7gwgqhpg5hkhbg9fwh7hrh8hqhzgeh9hhhsh6hhi4h8i9hshuhdhihtgzgzikgcgwfcgrgqg0hag0gshsi4hshnevhehzishhhuidi5ifh2hyimiaj2ifj5jjjgjfh5hnhsingmf6g3gdhggjh7g7fhfkgphjhbhxhkhjgkgng1iriwhshagnh9h4h4hwh4hqifg8hzi0h7ioiri5hrivhghdhmiehxicipiphxi3iihshhj0ifi4i9itigi9i8ifj2iiioieiqj7ieisi7jojej1idikifjeiviyj5j4fsilj3ixj1ipjoihj0itfkgxhbhahjhohzhghmhvhnhphpigi1hxhehxilighlifhuhzi2iaijdfgpfdexhgh7gohfgig7gug1fshli9i2hnh8h8i4gshqhui4hpj8g3ihfdhwfnhjhfhqimhnj5h6g6hpgogfhtgcgkgyhthpgyhjhpgwihhbithihyiji3glj3ichwgzhoi8hzh1huiphgirhqgzgxilithpi9i5jxj5jmjkfrigfthehmg5hogmgqgvhuhqhdh5hvisidi5i7ifhiivitipgyhqhyhyipidi4hcfsg8hihkj8hchnhai9goh8iph7iciyizj3iqieibjaijilhnhfidirgsfmgqihh9gah6gzheguhwi8hyifhxi2ighkj1hoiqi3h9i3iyivini7iihkiiiiizj7j3h5jif5hahwhfixiiiniphvemfxftgeg3gbgogtgogygggighgygqgfh4cohlh4hdhthygfg1hgi3iihri3i1hlgmfrgzhyhgg3hdhxhuhnhifuijjfhoi5j3ifhmhwj1hegyh3hshai7i7iii2inisimi8iliiiqihi1i6j3h6ithai5ipimikj8ipinfqfdfkheichrh5gqggh4gggohghugch4gwgyhigxhtivh8hsiai5hsidhrifiihxi6huigh1ihi9huibisidi8huibgdhvj0i3iuieg0itj4hmgyigibhoihisi7i3iahui1gehqhshrichmgsg9hbjjgkifhfi2icidgwiuhyhjiyh5jdkngjhrhxikhheyinfqfohsgmhyiqirhlj5i3j6itjvj9ich1gqgcgrhfgvgbfogc848i7n996d8p7i688a8r3u4x8a54as9e8w7eak8y7c5l7z71c17e5t7168804j815y588s7l3s577a4a9t6d687w7x3s4y4w6c528r5h6556';
+const PUZZLES=[["憂鬱","ゆううつ","hira"],["薔薇","ばら","hira"],["国語","こくご","hira"],["珈琲","コーヒー","kata"],["ありがとう","ありがとう","kanji"],["檸檬","れもん","hira"],["一期一会","いちごいちえ","hira"],["麒麟","きりん","hira"],["硝子","ガラス","kata"],["紫陽花","あじさい","hira"],["おはよう","おはよう","kanji"],["温故知新","おんこちしん","hira"],["蒲公英","たんぽぽ","hira"],["黒板","こくばん","hira"],["麦酒","ビール","kata"],["向日葵","ひまわり","hira"],["花鳥風月","かちょうふうげつ","hira"],["さようなら","さようなら","kanji"],["躊躇","ちゅうちょ","hira"],["林檎","りんご","hira"],["浪漫","ロマン","kata"],["春夏秋冬","しゅんかしゅうとう","hira"],["秋桜","こすもす","hira"],["辞書","じしょ","hira"],["こんにちは","こんにちは","kanji"],["葡萄","ぶどう","hira"],["起承転結","きしょうてんけつ","hira"],["煙草","タバコ","kata"],["蜻蛉","とんぼ","hira"],["給食","きゅうしょく","hira"],["黄昏","たそがれ","hira"],["喜怒哀楽","きどあいらく","hira"],["いただきます","いただきます","kanji"],["南瓜","かぼちゃ","hira"],["型録","カタログ","kata"],["五月雨","さみだれ","hira"],["魑魅魍魎","ちみもうりょう","hira"],["海月","くらげ","hira"],["宿題","しゅくだい","hira"],["おやすみ","おやすみ","kanji"],["蟷螂","かまきり","hira"],["一石二鳥","いっせきにちょう","hira"],["倶楽部","クラブ","kata"],["案山子","かかし","hira"],["図書館","としょかん","hira"],["陽炎","かげろう","hira"],["十人十色","じゅうにんといろ","hira"],["ただいま","ただいま","kanji"],["秋刀魚","さんま","hira"],["鉛筆","えんぴつ","hira"],["饂飩","うどん","hira"],["以心伝心","いしんでんしん","hira"],["混凝土","コンクリート","kata"],["蝸牛","かたつむり","hira"],["漢字","かんじ","hira"],["東雲","しののめ","hira"],["七転八起","しちてんはっき","hira"],["おかえり","おかえり","kanji"],["山葵","わさび","hira"],["吹雪","ふぶき","hira"]];
+const EPOCH='2026-11-15';
+const WT={}; {const cs=Array.from(WT_CH);for(let i=0;i<cs.length;i++)WT[cs[i]]=parseInt(WT_W.substr(i*2,2),36);}
+
+const MAXTRY=6, MAXLEN=12, MAXUSE=2;
+const GLYPH_FONT='"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif';
+const hira2kata=c=>{const n=c.codePointAt(0);return (n>=0x3041&&n<=0x3096)?String.fromCodePoint(n+0x60):c;};
+const KIND={
+  hira:{name:'ひらがな',test:c=>/^[ぁ-ゖゝゞー]$/.test(c),bad:'ひらがなだけ載せられます',ph:'ひらがなで打って「載せる」'},
+  kata:{name:'カタカナ',conv:hira2kata,test:c=>/^[ァ-ヺー-ヾ]$/.test(c),bad:'カタカナだけ載せられます',ph:'ひらがなで打てばカタカナに'},
+  kanji:{name:'漢字',test:c=>/^[\p{Script=Han}々〆]$/u.test(c),bad:'漢字に変換してから載せてください',ph:'漢字に変換して「載せる」'},
+  any:{name:'なんでも',test:c=>true,bad:'',ph:'右の言葉'}
+};
+const g1=v=>(v/10).toFixed(1);
+const wsum=s=>Array.from(s).reduce((a,c)=>a+(WT[c]||0),0);
+
+// ---- 日付（日本時間）と今日のお題 ----
+function jstDay(off){return new Date(Date.now()+9*3600e3+(off||0)*86400e3).toISOString().slice(0,10);}
+function dayNo(day){return Math.round((Date.parse(day+'T00:00:00Z')-Date.parse(EPOCH+'T00:00:00Z'))/86400e3)+1;}
+function puzzleOf(day){const n=dayNo(day);const p=PUZZLES[((n-1)%PUZZLES.length+PUZZLES.length)%PUZZLES.length];return {t:p[0],y:p[1],k:p[2],no:n,day};}
+
+// ---- 保存（失敗しても動く）----
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+
+// ---- DOM ----
+const $=id=>document.getElementById(id);
+const cv=$('cv'), ctx=cv.getContext('2d'), stage=$('stage');
+let colors={};
+function readColors(){const s=getComputedStyle(document.documentElement);
+  for(const k of ['paper','ink','muted','grid','accent','desk','deskdark','good'])colors[k]=s.getPropertyValue('--'+k).trim();}
+readColors(); setInterval(readColors,800);
+let toastT=0;
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200);}
+
+// ---- 音 ----
+let ac=null, soundOn=store.get('mojihakari_sound',true);
+function audio(){if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(ac&&ac.state==='suspended')ac.resume();}
+function knock(vol,freq){if(!ac||!soundOn)return;const now=ac.currentTime;
+  const len=0.06, buf=ac.createBuffer(1,ac.sampleRate*len,ac.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,6);
+  const src=ac.createBufferSource();src.buffer=buf;const f=ac.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;f.Q.value=4;
+  const g=ac.createGain();g.gain.value=Math.min(1,vol);src.connect(f);f.connect(g);g.connect(ac.destination);src.start(now);}
+function ding(freqs){if(!ac||!soundOn)return;const now=ac.currentTime;
+  freqs.forEach((fq,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=fq;
+    g.gain.setValueAtTime(0.0001,now+i*0.09);g.gain.exponentialRampToValueAtTime(0.22,now+i*0.09+0.01);g.gain.exponentialRampToValueAtTime(0.001,now+i*0.09+0.7);
+    o.connect(g);g.connect(ac.destination);o.start(now+i*0.09);o.stop(now+i*0.09+0.75);});}
+function updSoundBtn(){$('sound').textContent=soundOn?'音 入':'音 切';}
+updSoundBtn();
+$('sound').onclick=()=>{audio();soundOn=!soundOn;store.set('mojihakari_sound',soundOn);updSoundBtn();};
+
+// ---- ゲーム状態 ----
+// 重さはすべて 0.1g 単位の整数。diff = 右 − 左（正なら載せた言葉が重い）
+let G=null;
+const MAXT=16*Math.PI/180;
+function items(str,delay){return Array.from(str).map((ch,i)=>({ch,w:WT[ch]||0,t:-(delay||0)-i*0.13,landed:false}));}
+function newGame(mode,P,tries){
+  G={mode,P,L:P?wsum(P.t):0,tries:tries||[],state:'play',left:P?items(P.t,0.25):[],right:[],
+     th:0,om:0,settle:0,pending:null,label:null,endT:0,reveal:false,t0:performance.now()};
+  $('hudMode').textContent=mode==='daily'?'今日の一問 #'+P.no:mode==='prac'?'れんしゅう':'くらべる';
+  const cmp=mode==='cmp';
+  $('txtL').hidden=!cmp; $('txt').placeholder=cmp?'右の言葉':KIND[P.k].ph; $('go').textContent=cmp?'はかる':'載せる';
+  $('hudLeftL').textContent=cmp?'左 g':'のこり 回'; $('hudBestL').textContent=cmp?'右 g':'いちばん近い';
+  $('quit').textContent=cmp?'もどる':'やめる';
+  const task=$('task'); task.textContent='';
+  if(cmp){task.textContent='左右に好きな言葉を載せて、重さをくらべよう。';}
+  else{const b=document.createElement('b');b.textContent='「'+P.t+'」';task.append('お題 ',b,'（'+P.y+'）と釣り合う言葉を ');
+    const r=document.createElement('span');r.className='rule';r.textContent=KIND[P.k].name+'で';task.append(r);}
+  if(G.tries.length){const last=G.tries[G.tries.length-1];G.right=items(last.word,0.3);setLabel(last.diff);}
+  renderHist(); updHud();
+}
+
+function check(str,kind,target){
+  const k=KIND[kind]; const out=[]; const used={};
+  const chars=Array.from(str.normalize('NFC')).filter(c=>!/\s/.test(c));
+  if(!chars.length)return {err:'言葉を打ってください'};
+  for(let c of chars){
+    if(k.conv)c=k.conv(c);
+    if(!k.test(c))return {err:k.bad||'その字は載せられません'};
+    if(!(c in WT))return {err:'「'+c+'」はまだ量れません'};
+    if(target&&target.indexOf(c)>=0)return {err:'お題に入っている「'+c+'」は使えません'};
+    used[c]=(used[c]||0)+1; if(used[c]>MAXUSE)return {err:'同じ字は2回までです（'+c+'）'};
+    out.push(c);
+  }
+  if(out.length>MAXLEN)return {err:'12字までです'};
+  return {word:out.join('')};
+}
+
+function submit(str,strL){
+  if(!G||G.state!=='play')return false;
+  audio();
+  if(G.mode==='cmp'){
+    const a=check(strL||'','any'), b=check(str||'','any');
+    if(a.err||b.err){toast((a.err?'左：'+a.err:'右：'+b.err));return false;}
+    G.left=items(a.word,0); G.right=items(b.word,0.1); G.label=null; G.pending={l:a.word,r:b.word}; G.state='anim'; G.settle=0;
+    return true;
+  }
+  if(G.tries.length>=MAXTRY)return false;
+  const r=check(str,G.P.k,G.P.t);
+  if(r.err){toast(r.err);return false;}
+  if(G.tries.some(t=>t.word===r.word)){toast('それはもう載せました');return false;}
+  G.right=items(r.word,0); G.label=null; G.pending={word:r.word}; G.state='anim'; G.settle=0;
+  return true;
+}
+
+function bestOf(tries){let b=null;tries.forEach((t,i)=>{if(!b||Math.abs(t.diff)<Math.abs(b.diff))b={...t,no:i+1};});return b;}
+function grade(d){d=Math.abs(d);return d===0?'ぴったり！':d<=5?'おみごと':d<=20?'おしい':d<=50?'まずまず':'まだまだ';}
+function setLabel(diff){
+  const a=Math.abs(diff);
+  G.label=diff===0?{text:'ぴったり！',sub:'誤差 0.0g',good:true}:{text:'右が '+g1(a)+'g '+(diff>0?'重い':'軽い'),sub:grade(diff),good:a<=5};
+}
+
+function resolve(){
+  const p=G.pending; G.pending=null;
+  const Lw=G.left.reduce((a,o)=>a+o.w,0), Rw=G.right.reduce((a,o)=>a+o.w,0), diff=Rw-Lw;
+  if(G.mode==='cmp'){
+    G.label=diff===0?{text:'ぴったり同じ重さ',sub:g1(Lw)+'g',good:true}:{text:(diff>0?'右':'左')+'が '+g1(Math.abs(diff))+'g 重い',sub:'左 '+g1(Lw)+'g ／ 右 '+g1(Rw)+'g',good:false};
+    G.cmp={l:p.l,r:p.r,Lw,Rw}; G.state='play'; G.reveal=true; if(diff===0)ding([880,1320]);
+    renderHist(); updHud(); return;
+  }
+  G.tries.push({word:p.word,diff}); setLabel(diff);
+  if(diff===0)ding([880,1175,1760]); else if(Math.abs(diff)<=5)ding([880,1175]);
+  if(G.mode==='daily')store.set('mojihakari_daily',{day:G.P.day,tries:G.tries,done:false});
+  renderHist(); updHud();
+  if(diff===0||G.tries.length>=MAXTRY){G.state='ending';G.endT=1.6;} else G.state='play';
+}
+
+function update(dt){
+  if(!G)return;
+  let Lw=0,Rw=0,all=true;
+  for(const [arr,sgn] of [[G.left,-1],[G.right,1]])for(const o of arr){
+    o.t+=dt;
+    if(!o.landed&&o.t>=0.3){o.landed=true;G.om+=sgn*0.12;G.settle=0;knock(0.12+o.w/2500,900+Math.random()*500);}
+    if(o.landed){if(sgn<0)Lw+=o.w;else Rw+=o.w;} else all=false;
+  }
+  const tt=(Lw||Rw)?MAXT*Math.tanh((Rw-Lw)/(0.08*Math.max(Lw,Rw,100))):0;
+  G.om+=(38*(tt-G.th)-4.2*G.om)*dt; G.th+=G.om*dt;
+  if(G.state==='anim'){
+    if(all)G.settle+=dt;
+    if(all&&G.settle>1.5)resolve();
+  } else if(G.state==='ending'){G.endT-=dt; if(G.endT<=0)finish();}
+}
+
+// ---- 描画 ----
+let cw=0,ch=0,dpr=1;
+function resize(){const r=stage.getBoundingClientRect();dpr=Math.min(2,window.devicePixelRatio||1);
+  cw=r.width;ch=r.height;cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);}
+new ResizeObserver(resize).observe(stage); resize();
+const VW=360, VH=390, PIV=64, BEAM=100, HANG=150, PANW=144, FS=34, BASE=302;
+function slot(i,n){const r=Math.floor(i/4), inRow=Math.min(4,n-r*4), c=i-r*4;return {x:(c-(inRow-1)/2)*FS, y:-FS/2-1-r*FS};}
+
+function drawPan(cx,cy,ex,ey,arr,total,showTotal,hidden){
+  ctx.strokeStyle=colors.deskdark;ctx.lineWidth=1.2;ctx.beginPath();
+  ctx.moveTo(ex,ey);ctx.lineTo(cx-PANW/2+4,cy);ctx.moveTo(ex,ey);ctx.lineTo(cx+PANW/2-4,cy);ctx.stroke();
+  ctx.fillStyle=colors.desk;ctx.beginPath();ctx.moveTo(cx-PANW/2,cy);ctx.lineTo(cx+PANW/2,cy);ctx.quadraticCurveTo(cx,cy+22,cx-PANW/2,cy);ctx.fill();
+  ctx.fillStyle=colors.deskdark;ctx.fillRect(cx-PANW/2,cy-1.5,PANW,3);
+  ctx.fillStyle=colors.ink;ctx.font=`900 ${FS}px ${GLYPH_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  arr.forEach((o,i)=>{if(o.t<0)return;const s=slot(i,arr.length);const p=Math.min(1,o.t/0.3);
+    const yy=cy+s.y-(1-p*p)*170;ctx.globalAlpha=Math.min(1,o.t/0.08);ctx.fillText(o.ch,cx+s.x,yy);ctx.globalAlpha=1;});
+  ctx.font=`700 13px ${GLYPH_FONT}`;ctx.fillStyle=colors.muted;ctx.textBaseline='top';
+  if(showTotal)ctx.fillText(g1(total)+'g',cx,cy+18); else if(hidden)ctx.fillText('？g',cx,cy+18);
+}
+
+function render(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=colors.paper;ctx.fillRect(0,0,cw,ch);
+  // 原稿用紙のマス
+  ctx.lineWidth=0.6;ctx.strokeStyle=colors.grid;ctx.globalAlpha=0.25;ctx.beginPath();
+  for(let x=cw/2%30;x<=cw;x+=30){ctx.moveTo(x,0);ctx.lineTo(x,ch);}
+  for(let y=0;y<=ch;y+=30){ctx.moveTo(0,y);ctx.lineTo(cw,y);}
+  ctx.stroke();ctx.globalAlpha=1;
+  if(!G)return;
+  const z=Math.min(cw/VW,ch/VH);
+  ctx.setTransform(dpr*z,0,0,dpr*z,dpr*cw/2,dpr*Math.max(0,(ch-VH*z)/2));
+  const th=G.th, c=Math.cos(th), s=Math.sin(th);
+  // 柱と台
+  ctx.fillStyle=colors.deskdark;ctx.fillRect(-5,PIV,10,BASE-PIV);
+  ctx.fillStyle=colors.desk;ctx.beginPath();ctx.moveTo(-64,BASE+12);ctx.lineTo(64,BASE+12);ctx.lineTo(48,BASE);ctx.lineTo(-48,BASE);ctx.fill();
+  ctx.fillStyle=colors.deskdark;ctx.fillRect(-64,BASE+12,128,4);
+  // 目盛り
+  ctx.strokeStyle=colors.muted;ctx.lineWidth=1;ctx.beginPath();
+  for(let i=-4;i<=4;i++){const a=Math.PI/2+i*MAXT/4*1.6, r1=i===0?52:58;ctx.moveTo(Math.cos(a)*r1,PIV+Math.sin(a)*r1);ctx.lineTo(Math.cos(a)*66,PIV+Math.sin(a)*66);}
+  ctx.stroke();
+  // 針（傾きを1.6倍に見せる）
+  const na=Math.PI/2+Math.max(-MAXT,Math.min(MAXT,th))*1.6;
+  const level=Math.abs(th)<0.012&&Math.abs(G.om)<0.05&&G.right.length>0&&G.right.every(o=>o.landed);
+  ctx.strokeStyle=level?colors.good:colors.accent;ctx.lineWidth=2.5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,PIV);ctx.lineTo(Math.cos(na)*62,PIV+Math.sin(na)*62);ctx.stroke();ctx.lineCap='butt';
+  // 竿
+  const lx=-BEAM*c, ly=PIV-BEAM*s, rx=BEAM*c, ry=PIV+BEAM*s;
+  ctx.strokeStyle=colors.desk;ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(rx,ry);ctx.stroke();ctx.lineCap='butt';
+  ctx.fillStyle=colors.deskdark;ctx.beginPath();ctx.arc(0,PIV,7,0,Math.PI*2);ctx.fill();
+  // 皿
+  const Lw=G.left.reduce((a,o)=>a+o.w,0), Rw=G.right.reduce((a,o)=>a+o.w,0);
+  const showAll=G.mode==='cmp'?G.reveal&&G.state==='play':G.reveal;
+  drawPan(lx,ly+HANG,lx,ly,G.left,Lw,showAll&&G.left.length,G.mode!=='cmp');
+  drawPan(rx,ry+HANG,rx,ry,G.right,Rw,showAll&&G.right.length,false);
+  // 判定
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  if(G.label){ctx.fillStyle=G.label.good?colors.good:colors.ink;ctx.font=`900 22px ${GLYPH_FONT}`;ctx.fillText(G.label.text,0,BASE+42);
+    ctx.fillStyle=colors.muted;ctx.font=`700 13px ${GLYPH_FONT}`;ctx.fillText(G.label.sub,0,BASE+66);}
+  else if(G.state==='play'&&!G.right.length){ctx.fillStyle=colors.muted;ctx.font=`700 14px ${GLYPH_FONT}`;
+    ctx.fillText(G.mode==='cmp'?'下の欄に左右の言葉を打って「はかる」':'下の欄に言葉を打って「載せる」',0,BASE+48);}
+}
+
+// ---- HUD・これまでに載せた言葉 ----
+function updHud(){if(!G)return;
+  if(G.mode==='cmp'){$('hudLeft').textContent=G.cmp?g1(G.cmp.Lw):'-';$('hudBest').textContent=G.cmp?g1(G.cmp.Rw):'-';return;}
+  $('hudLeft').textContent=MAXTRY-G.tries.length; const b=bestOf(G.tries); $('hudBest').textContent=b?'±'+g1(Math.abs(b.diff))+'g':'-';
+  $('quit').textContent=G.tries.length?'決める':'やめる';
+  $('go').disabled=G.tries.length>=MAXTRY;}
+function renderHist(){const q=$('hist');q.textContent='';const l=document.createElement('span');l.className='lbl';q.appendChild(l);
+  if(G&&G.mode==='cmp'){l.textContent='1字ずつ';
+    if(!G.cmp){const e=document.createElement('span');e.className='empty';e.textContent='はかると、1字ごとの重さが出ます';q.appendChild(e);return;}
+    const cp=document.createElement('button');cp.className='icon-btn';cp.style.flex='none';cp.textContent='結果をコピー';cp.onclick=()=>copyText(cmpText());q.appendChild(cp);
+    for(const c of [...new Set(Array.from(G.cmp.l+G.cmp.r))]){const d=document.createElement('span');d.className='h';const b=document.createElement('b');b.textContent=c;d.append(b,g1(WT[c]));q.appendChild(d);}
+    return;}
+  l.textContent='きろく';
+  if(!G||!G.tries.length){const e=document.createElement('span');e.className='empty';e.textContent='まだ載せていません';q.appendChild(e);return;}
+  const best=bestOf(G.tries);
+  G.tries.forEach((t,i)=>{const d=document.createElement('span');d.className='h'+(best.no===i+1?' best':'');const b=document.createElement('b');b.textContent=t.word;
+    d.append((i+1)+' ',b,t.diff===0?'ぴったり':(t.diff>0?'＋':'−')+g1(Math.abs(t.diff))+'g');q.appendChild(d);});
+  q.scrollLeft=q.scrollWidth;}
+
+// ---- ランキング ----
+let cid=store.get('mojihakari_cid','');
+if(!cid){cid=Array.from(crypto.getRandomValues(new Uint8Array(10)),x=>(x%36).toString(36)).join('')+Date.now().toString(36);store.set('mojihakari_cid',cid);}
+let apiDown=!RANK_API;
+const gCache={};
+function apiGet(day){
+  const c=gCache[day]; if(c&&Date.now()-c.t<20000)return Promise.resolve(c.j);
+  const ctl=new AbortController(); const tm=setTimeout(()=>ctl.abort(),9000);
+  return fetch(RANK_API+'?game=hakari&day='+day+'&cid='+cid,{signal:ctl.signal}).then(r=>r.json()).then(j=>{clearTimeout(tm);if(!j.ok||j.game!=='hakari')throw 0;gCache[day]={t:Date.now(),j};return j;});
+}
+function apiPost(d){
+  const ctl=new AbortController(); setTimeout(()=>ctl.abort(),12000);
+  return fetch(RANK_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d),signal:ctl.signal}).then(r=>r.json());
+}
+const fmtRec=e=>(e.diff===0?'ぴったり':'±'+g1(Math.abs(e.diff))+'g')+'・'+e.no+'回目';
+function rankPanel(el){
+  const tabs=apiDown?[['local','この端末の記録']]:[['today','今日'],['yday','きのう'],['local','この端末の記録']];
+  if(!el._tab||!tabs.some(t=>t[0]===el._tab))el._tab=tabs[0][0];
+  el.textContent='';
+  const h=document.createElement('h2');h.style.fontSize='16px';h.textContent=apiDown?'これまでの記録':'全国ランキング';el.appendChild(h);
+  const t2=document.createElement('div');t2.className='tabs';
+  for(const [k,label] of tabs){const b=document.createElement('button');b.className='tab';b.textContent=label;b.setAttribute('aria-pressed',k===el._tab);b.onclick=()=>{el._tab=k;rankPanel(el);};t2.appendChild(b);}
+  if(tabs.length>1)el.appendChild(t2);
+  const st=document.createElement('div');st.className='rank-status';el.appendChild(st);
+  const ol=document.createElement('ol');ol.className='rank';el.appendChild(ol);
+  const row=(a,name,sub,right,me)=>{const li=document.createElement('li');if(me)li.className='me';
+    const s1=document.createElement('span'),s2=document.createElement('span'),s3=document.createElement('span');
+    s1.textContent=a;s2.textContent=name;if(sub){const sm=document.createElement('small');sm.textContent=sub;s2.appendChild(sm);}s3.textContent=right;li.append(s1,s2,s3);ol.appendChild(li);};
+  if(el._tab==='local'){const list=store.get('mojihakari_hist',[]);st.textContent=list.length?'':'まだ記録がありません';
+    list.forEach(e=>row('#'+e.pno,'「'+e.t+'」','「'+e.word+'」',fmtRec(e),false));return;}
+  const day=jstDay(el._tab==='yday'?-1:0), P=puzzleOf(day), tab=el._tab;
+  st.textContent='読み込み中…';
+  apiGet(day).then(j=>{if(el._tab!==tab)return;
+    st.textContent='#'+P.no+'「'+P.t+'」'+(j.list.length?'　'+j.total+'人が挑戦':'　まだ記録がありません')+(j.list.length&&!j.open?'（答えは自分が終えると見られます）':'');
+    j.list.forEach((e,i)=>row(i+1,e.name,e.word?'「'+e.word+'」':'',fmtRec(e),e.me===cid.slice(-6)));
+  }).catch(()=>{apiDown=true;rankPanel(el);});
+}
+
+// ---- 結果 ----
+let R=null;
+function eqSide(word,w){const d=document.createElement('div');const s=document.createElement('div');s.className='side';
+  const b=document.createElement('b');b.textContent='「'+word+'」';const sp=document.createElement('span');sp.textContent=g1(w)+'g';s.append(b,sp);
+  const e=document.createElement('div');e.className='each';e.textContent=Array.from(word).map(c=>c+' '+g1(WT[c])).join('　');d.append(s,e);return d;}
+function marks(tries){return tries.map(t=>t.diff===0?'⚖️':Math.abs(t.diff)<=5?'≒':t.diff>0?'↘':'↙').join(' ');}
+function shareText(){
+  if(!R)return '';
+  const b=R.best, head=R.mode==='daily'?'もじはかり #'+R.P.no:'もじはかり（れんしゅう）';
+  let s=head+'「'+R.P.t+'」\n'+(b.diff===0?'ぴったり！':'誤差 '+g1(Math.abs(b.diff))+'g')+'（'+b.no+'回目）\n'+marks(R.tries);
+  if(R.mode!=='daily'||$('spoil').checked)s+='\n「'+R.P.t+'」'+(b.diff===0?'＝':'≒')+'「'+b.word+'」';
+  return s;
+}
+function cmpText(){const c=G.cmp,d=c.Rw-c.Lw;
+  return 'もじはかり\n'+(d===0?`「${c.l}」と「${c.r}」はぴったり同じ重さ（${g1(c.Lw)}g）`:`「${d>0?c.r:c.l}」（${g1(Math.max(c.Lw,c.Rw))}g）は「${d>0?c.l:c.r}」（${g1(Math.min(c.Lw,c.Rw))}g）より ${g1(Math.abs(d))}g 重い`)+'\n#もじはかり'+(PUBLIC_URL?'\n'+PUBLIC_URL:'');}
+function copyText(v){const done=()=>toast('コピーしました');try{navigator.clipboard.writeText(v).then(done,()=>toast('コピーできませんでした'));}catch(e){toast('コピーできませんでした');}}
+function updShare(){
+  const text=shareText();
+  $('shareText').value=text+(PUBLIC_URL?'\n'+PUBLIC_URL:'');
+  $('tweet').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(text+'\n#もじはかり')+(PUBLIC_URL?'&url='+encodeURIComponent(PUBLIC_URL):'');
+}
+function showResult(r){
+  R=r; const b=r.best, P=r.P;
+  $('rTitle').textContent=b.diff===0?'ぴったり！':grade(b.diff);
+  $('rScore').innerHTML=''; $('rScore').append(b.diff===0?'±0.0':'±'+g1(Math.abs(b.diff)));const sm=document.createElement('small');sm.textContent=' g';$('rScore').appendChild(sm);
+  $('rBreak').textContent=(r.mode==='daily'?'今日の一問 #'+P.no:'れんしゅう')+'・'+b.no+'回目の言葉がいちばん釣り合った（'+KIND[P.k].name+'）';
+  const eq=$('rEq');eq.textContent='';eq.append(eqSide(P.t,wsum(P.t)),eqSide(b.word,wsum(b.word)));
+  $('rTries').textContent='載せた言葉：'+r.tries.map((t,i)=>(i+1)+'「'+t.word+'」'+(t.diff===0?'ぴったり':(t.diff>0?'＋':'−')+g1(Math.abs(t.diff))+'g')).join('　');
+  $('spoilRow').hidden=r.mode!=='daily'; $('spoil').checked=false;
+  $('again').textContent=r.mode==='daily'?'れんしゅうする':'もう一問';
+  updShare();
+  const my=$('rMyRank'), panel=$('rPanel'); my.textContent=''; panel.hidden=r.mode!=='daily';
+  if(r.mode==='daily'){
+    panel._tab=apiDown?'local':'today';
+    const saved=store.get('mojihakari_daily',{});
+    if(!apiDown&&!saved.posted){
+      my.textContent='全国ランキングに送っています…';
+      const name=($('name').value.trim()||'ななし').slice(0,10);
+      apiPost({game:'hakari',day:P.day,name,words:r.tries.map(t=>t.word),cid}).then(j=>{
+        if(!j.ok&&j.error!=='already'){my.textContent='この記録は全国ランキングに送れませんでした（この端末には残っています）';return;}
+        store.set('mojihakari_daily',{...store.get('mojihakari_daily',{}),posted:true});
+        Object.keys(gCache).forEach(k=>delete gCache[k]);
+        my.textContent=j.rank?`全国 今日 ${j.rank}位／${j.total}人`+(j.name&&j.name!==name?'（名前は「'+j.name+'」で登録）':''):'';
+        rankPanel(panel);
+      }).catch(()=>{my.textContent='通信できなかったので、あとで開いたときにもう一度送ります';});
+    }
+    rankPanel(panel);
+  }
+  $('result').hidden=false;
+}
+function finish(){
+  if(!G||G.state==='over'||G.mode==='cmp')return;
+  const best=bestOf(G.tries); if(!best)return;
+  G.state='over'; G.reveal=true;
+  const r={mode:G.mode,P:G.P,tries:G.tries,best};
+  if(G.mode==='daily'){
+    store.set('mojihakari_daily',{day:G.P.day,tries:G.tries,done:true,posted:false});
+    const hist=store.get('mojihakari_hist',[]).filter(e=>e.day!==G.P.day);
+    hist.unshift({day:G.P.day,pno:G.P.no,t:G.P.t,word:best.word,diff:best.diff,no:best.no});store.set('mojihakari_hist',hist.slice(0,30));
+  }
+  showResult(r); renderModes();
+}
+
+// ---- はじめの画面 ----
+function renderModes(){const box=$('modes');box.textContent='';
+  const day=jstDay(0), P=puzzleOf(day), sv=store.get('mojihakari_daily',{}), mine=sv.day===day?sv:null, b=mine&&mine.tries&&mine.tries.length?bestOf(mine.tries):null;
+  const mk=(id,cls,name,sample,note,fn)=>{const el=document.createElement('button');el.className='mode'+cls;el.id=id;
+    for(const [c,t] of [['m-name',name],['m-sample',sample],['m-best',note]]){const s=document.createElement('span');s.className=c;s.textContent=t;el.appendChild(s);}
+    el.onclick=fn;box.appendChild(el);};
+  mk('mode-daily',' wide','今日の一問 #'+P.no,'「'+P.t+'」を'+KIND[P.k].name+'で',
+    mine&&mine.done?'今日の記録 '+(b.diff===0?'ぴったり':'±'+g1(Math.abs(b.diff))+'g')+'（'+b.no+'回目）・結果を見る':b?'つづきから（のこり'+(MAXTRY-mine.tries.length)+'回）':'1日1問。全国で同じお題に挑戦',()=>start('daily'));
+  mk('mode-prac','','れんしゅう','別のお題','何度でも。記録なし',()=>start('prac'));
+  mk('mode-cmp','','くらべる','愛 と 恋','好きな言葉どうしを量る',()=>start('cmp'));
+}
+function start(mode){audio();store.set('mojihakari_name',$('name').value);
+  $('title').hidden=true;$('result').hidden=true;$('txt').value='';$('txtL').value='';
+  if(mode==='daily'){const day=jstDay(0),P=puzzleOf(day),sv=store.get('mojihakari_daily',{});
+    const tries=sv.day===day&&Array.isArray(sv.tries)?sv.tries:[];
+    newGame('daily',P,tries);
+    if(sv.day===day&&sv.done&&tries.length){G.state='over';G.reveal=true;showResult({mode:'daily',P,tries,best:bestOf(tries)});}
+    else if(tries.length>=MAXTRY){finish();}
+  } else if(mode==='prac'){const today=puzzleOf(jstDay(0)).t;let p;do{p=PUZZLES[Math.floor(Math.random()*PUZZLES.length)];}while(p[0]===today||(G&&G.P&&p[0]===G.P.t));
+    newGame('prac',{t:p[0],y:p[1],k:p[2],no:0,day:''});
+  } else newGame('cmp',null);
+}
+function toTitle(){$('result').hidden=true;$('title').hidden=false;G=null;renderModes();rankPanel($('tPanel'));}
+
+// ---- 入力 ----
+$('form').addEventListener('submit',e=>{e.preventDefault();const t=$('txt'),l=$('txtL');
+  if(G&&G.mode==='cmp'){if(submit(t.value,l.value)){t.blur();l.blur();}return;}
+  if(submit(t.value)){t.value='';t.blur();}});
+$('quit').onclick=()=>{if(!G)return;if(G.mode!=='cmp'&&G.tries.length&&G.state==='play')finish();else if(G.state==='play'||G.state==='over')toTitle();};
+$('again').onclick=()=>start('prac');
+$('toTitle').onclick=toTitle;
+$('spoil').onchange=updShare;
+$('copy').onclick=()=>copyText($('shareText').value);
+
+// ---- ループ ----
+let last=performance.now();
+function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;update(dt);render();requestAnimationFrame(frame);}
+function boot(){
+  $('name').value=store.get('mojihakari_name','');
+  renderModes();rankPanel($('tPanel'));
+  document.fonts.load(`900 ${FS}px "Noto Sans JP"`,'あア字').catch(()=>{});
+  requestAnimationFrame(frame);
+}
+window.__game={get G(){return G;},submit,start,finish,WT,wsum,puzzleOf,jstDay,tick(sec){for(let i=0;i<sec*60;i++)update(1/60);render();}};
+window.claude?.hot?.ready?window.claude.hot.ready(boot):boot();
+})();
+</script>
+
+</body></html>
